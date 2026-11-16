@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { PageHead, Status } from "@/components/ui";
+import { Kpi, PageHead, Status } from "@/components/ui";
 import { JOB_COLOR, JOB_LABEL, STATE_COLOR, STATE_LABEL, activity, fmtClock, fmtDuration, installerState, jobStats, type JobStatus } from "@/lib/status";
 import { useLive } from "./shell";
 
@@ -139,12 +139,3 @@ export default function OverviewPage() {
   );
 }
 
-function Kpi({ label, value, hint, warn }: { label: string; value: string; hint: string; warn?: boolean }) {
-  return (
-    <div className="p-4">
-      <div className="label">{label}</div>
-      <div className="num mt-2 text-[26px] font-medium leading-none tracking-tight">{value}</div>
-      <div className={`mt-2 text-xs ${warn ? "text-amber-400" : "text-dim"}`}>{hint}</div>
-    </div>
-  );
-}

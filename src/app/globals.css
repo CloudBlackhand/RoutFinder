@@ -12,6 +12,10 @@
   --color-dim: #5c5c66;
 }
 
+:root {
+  color-scheme: dark;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-fg);

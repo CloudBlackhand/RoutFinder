@@ -29,5 +29,12 @@ export async function POST(req: Request, ctx: RouteContext<"/api/installer/jobs/
     .returning();
   if (!row) return Response.json({ error: "Job não encontrado" }, { status: 404 });
   if (parsed.data.action === "iniciar" && !row.arrivedAt) await db.update(schema.jobs).set({ arrivedAt: now }).where(eq(schema.jobs.id, jobId));
+  if (parsed.data.action === "concluir") {
+    if (row.orderId) {
+      const [order] = await db.update(schema.orders).set({ status: "concluido", closedAt: now }).where(eq(schema.orders.id, row.orderId)).returning();
+      if (order?.contractId) await db.update(schema.contracts).set({ status: "ativo", activatedAt: now }).where(eq(schema.contracts.id, order.contractId));
+    }
+    if (row.ticketId) await db.update(schema.tickets).set({ status: "resolvido", resolvedAt: now }).where(eq(schema.tickets.id, row.ticketId));
+  }
   return Response.json({ ok: true });
 }

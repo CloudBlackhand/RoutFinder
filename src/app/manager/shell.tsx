@@ -17,12 +17,33 @@ const NAV = [
     items: [
       { href: "/manager", label: "Visão geral", icon: "M3 3h7v7H3zM14 3h7v4h-7zM14 11h7v10h-7zM3 14h7v7H3z" },
       { href: "/manager/monitoramento", label: "Monitoramento", icon: "M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
+      { href: "/manager/agenda", label: "Agenda", icon: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4" },
+      { href: "/manager/servicos", label: "Serviços do dia", icon: "M4 5h16M4 12h16M4 19h10" },
+    ],
+  },
+  {
+    group: "Comercial",
+    items: [
+      { href: "/manager/clientes", label: "Clientes", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21v-1a8 8 0 0 1 16 0v1" },
+      { href: "/manager/pedidos", label: "Pedidos", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" },
+      { href: "/manager/planos", label: "Planos", icon: "M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0M12 20h.01" },
+    ],
+  },
+  {
+    group: "Financeiro",
+    items: [
+      { href: "/manager/financeiro", label: "Faturas e cobrança", icon: "M3 6h18v12H3zM3 10h18M7 15h4" },
+    ],
+  },
+  {
+    group: "Suporte",
+    items: [
+      { href: "/manager/chamados", label: "Chamados", icon: "M4 4h16v12H8l-4 4zM8 9h8M8 12h5" },
     ],
   },
   {
     group: "Gestão",
     items: [
-      { href: "/manager/servicos", label: "Serviços", icon: "M4 5h16M4 12h16M4 19h10" },
       { href: "/manager/equipe", label: "Equipe", icon: "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 4a4 4 0 0 1 0 7M22 21v-1a6 6 0 0 0-4-5.6" },
     ],
   },
@@ -83,7 +104,7 @@ export default function ManagerShell({ children }: { children: React.ReactNode }
           </Link>
           <nav className="flex-1 overflow-y-auto py-4">
             {NAV.map((g) => (
-              <div key={g.group} className="mb-5">
+              <div key={g.group} className="mb-4">
                 <div className="label px-5 pb-2">{g.group}</div>
                 {g.items.map((t) => {
                   const active = t.href === "/manager" ? path === t.href : path.startsWith(t.href);
