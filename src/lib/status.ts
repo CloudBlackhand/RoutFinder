@@ -63,3 +63,21 @@ export function jobStats(jobs: LiveJob[], now: number) {
   const avgTravel = travel.length ? travel.reduce((a, j) => a + (new Date(j.arrivedAt!).getTime() - new Date(j.startedRouteAt!).getTime()), 0) / travel.length : 0;
   return { total: jobs.length, done: done.length, active: jobs.filter((j) => j.status === "em_andamento").length, avgService, avgTravel, now };
 }
+
+export type Activity = { ts: number; text: string; color: string; jobId: number };
+
+/** Linha do tempo do dia, derivada dos horários registrados em cada serviço. */
+export function activity(data: LiveData, limit = 40): Activity[] {
+  const name = (id: number | null) => data.installers.find((i) => i.id === id)?.name.split(" ")[0] ?? "Instalador";
+  const out: Activity[] = [];
+  for (const j of data.jobs) {
+    const add = (t: string | null, text: string, color: string) => t && out.push({ ts: new Date(t).getTime(), text, color, jobId: j.id });
+    add(j.startedRouteAt, `${name(j.installerId)} saiu para ${j.customer}`, JOB_COLOR.a_caminho);
+    add(j.arrivedAt, `${name(j.installerId)} chegou em ${j.customer}`, JOB_COLOR.pendente);
+    add(j.startedAt, `${name(j.installerId)} iniciou ${j.type === "reparo" ? "reparo" : "instalação"} em ${j.customer}`, JOB_COLOR.em_andamento);
+    add(j.finishedAt, `${name(j.installerId)} concluiu ${j.customer}`, JOB_COLOR.concluido);
+  }
+  return out.sort((a, b) => b.ts - a.ts).slice(0, limit);
+}
+
+export const fmtClock = (ts: number | string) => new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });

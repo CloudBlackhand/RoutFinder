@@ -1,5 +1,148 @@
 @import "tailwindcss";
 
+@theme inline {
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --color-bg: #09090b;
+  --color-panel: #0f0f11;
+  --color-raised: #17171a;
+  --color-line: #26262b;
+  --color-fg: #ededf0;
+  --color-mute: #8a8a93;
+  --color-dim: #5c5c66;
+}
+
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+@layer components {
+  .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-mute);
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .panel {
+    background: var(--color-panel);
+    border: 1px solid var(--color-line);
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 36px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--color-line);
+    background: var(--color-raised);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: var(--color-mute);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: var(--color-fg);
+    border-color: var(--color-fg);
+    color: var(--color-bg);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #fff;
+    border-color: #fff;
+  }
+  .btn-danger {
+    color: #f87171;
+  }
+  .btn-sm {
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+  .field {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-line);
+    color: var(--color-fg);
+    font-size: 13px;
+    outline: none;
+  }
+  .field:focus {
+    border-color: var(--color-fg);
+  }
+  .field:disabled {
+    color: var(--color-dim);
+  }
+  .tbl {
+    width: 100%;
+    text-align: left;
+    border-collapse: collapse;
+  }
+  .tbl th {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-mute);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-line);
+    white-space: nowrap;
+  }
+  .tbl td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: middle;
+  }
+  .tbl tr:last-child td {
+    border-bottom: 0;
+  }
+  .tbl tbody tr:hover td {
+    background: var(--color-raised);
+  }
+}
+
+/* MapLibre: controles no mesmo padrão visual */
+.maplibregl-ctrl-group {
+  border-radius: 0 !important;
+  background: var(--color-panel) !important;
+  box-shadow: 0 0 0 1px var(--color-line) !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--color-line) !important;
+}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(9, 9, 11, 0.8) !important;
+  color: var(--color-dim);
+  font-size: 10px;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--color-mute) !important;
 }

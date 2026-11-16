@@ -1,13 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Status } from "@/components/ui";
 import { JOB_COLOR, JOB_LABEL, type LiveData } from "@/lib/status";
 
-const input = "w-full rounded-lg bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500";
 const post = (url: string, method: string, body?: unknown) =>
   fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
 
 type Hit = { label: string; lat: number; lng: number };
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="label">{label}</span>
+      {children}
+    </label>
+  );
+}
 
 export function JobsPanel({ data, reload }: { data: LiveData | null; reload: () => void }) {
   const [form, setForm] = useState({ name: "", phone: "", address: "", type: "instalacao", installerId: "" });
@@ -62,77 +71,88 @@ export function JobsPanel({ data, reload }: { data: LiveData | null; reload: () 
   const jobs = [...(data?.jobs ?? [])].sort((a, b) => (a.installerId ?? 0) - (b.installerId ?? 0) || (a.stopOrder ?? 99) - (b.stopOrder ?? 99));
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[380px_1fr]">
-      <form onSubmit={create} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-900 p-4">
-        <h3 className="text-sm font-semibold">Novo serviço</h3>
-        <input className={input} placeholder="Nome do cliente" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input className={input} placeholder="Telefone (opcional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        <div className="flex gap-2">
-          <input className={input} placeholder="Rua, número, cidade" required value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setPlace(null); }} />
-          <button type="button" onClick={search} className="rounded-lg bg-slate-700 px-3 text-xs">Buscar</button>
+    <div className="grid items-start gap-5 lg:grid-cols-[340px_1fr]">
+      <form onSubmit={create} className="panel">
+        <div className="panel-head"><span className="label">Novo serviço</span></div>
+        <div className="flex flex-col gap-3 p-3">
+          <Field label="Cliente">
+            <input className="field" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <Field label="Telefone (opcional)">
+            <input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </Field>
+          <Field label="Endereço">
+            <div className="flex gap-2">
+              <input className="field" placeholder="Rua, número, cidade" required value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setPlace(null); }} />
+              <button type="button" onClick={search} className="btn">Buscar</button>
+            </div>
+          </Field>
+          {hits.length > 0 && !place && (
+            <ul className="border border-line">
+              {hits.map((h) => (
+                <li key={`${h.lat},${h.lng}`} className="border-b border-line last:border-0">
+                  <button type="button" onClick={() => { setPlace(h); setHits([]); }} className="w-full px-2.5 py-2 text-left text-xs leading-snug hover:bg-raised">{h.label}</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {place && <p className="border-l-2 border-emerald-400 pl-2 text-xs leading-snug text-mute">{place.label}</p>}
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Tipo">
+              <select className="field" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                <option value="instalacao">Instalação</option>
+                <option value="reparo">Reparo</option>
+              </select>
+            </Field>
+            <Field label="Instalador">
+              <select className="field" value={form.installerId} onChange={(e) => setForm({ ...form, installerId: e.target.value })}>
+                <option value="">Atribuir depois</option>
+                {installers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            </Field>
+          </div>
+          <button disabled={busy} className="btn btn-primary mt-1">Adicionar serviço</button>
+          {msg && <p className="text-xs text-mute">{msg}</p>}
         </div>
-        {hits.length > 0 && !place && (
-          <ul className="flex flex-col gap-1">
-            {hits.map((h) => (
-              <li key={`${h.lat},${h.lng}`}>
-                <button type="button" onClick={() => { setPlace(h); setHits([]); }} className="w-full rounded bg-white/5 px-2 py-1 text-left text-xs hover:bg-white/10">{h.label}</button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {place && <p className="text-xs text-emerald-400">Local: {place.label}</p>}
-        <div className="flex gap-2">
-          <select className={input} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-            <option value="instalacao">Instalação</option>
-            <option value="reparo">Reparo</option>
-          </select>
-          <select className={input} value={form.installerId} onChange={(e) => setForm({ ...form, installerId: e.target.value })}>
-            <option value="">Atribuir depois</option>
-            {installers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-          </select>
-        </div>
-        <button disabled={busy} className="rounded-lg bg-emerald-500 py-2 text-sm font-medium text-slate-950 disabled:opacity-50">Adicionar</button>
-        {msg && <p className="text-xs text-slate-300">{msg}</p>}
       </form>
 
-      <section className="overflow-hidden rounded-xl border border-white/10 bg-slate-900">
-        <h2 className="border-b border-white/10 px-4 py-3 font-semibold">Serviços de hoje ({jobs.length})</h2>
+      <section className="panel overflow-hidden">
+        <div className="panel-head">
+          <span className="label">Serviços de hoje</span>
+          <span className="num text-[11px] text-mute">{jobs.length} no total</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase text-slate-400">
+          <table className="tbl">
+            <thead>
               <tr>
-                <th className="px-4 py-2">Parada</th>
-                <th className="px-4 py-2">Cliente</th>
-                <th className="px-4 py-2">Tipo</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Instalador</th>
-                <th className="px-4 py-2" />
+                <th>#</th>
+                <th>Cliente</th>
+                <th>Tipo</th>
+                <th>Status</th>
+                <th>Instalador</th>
+                <th />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody>
               {jobs.map((j) => (
                 <tr key={j.id}>
-                  <td className="px-4 py-3">{j.stopOrder ?? "-"}</td>
-                  <td className="px-4 py-3">
+                  <td className="num text-mute">{j.stopOrder ? String(j.stopOrder).padStart(2, "0") : "--"}</td>
+                  <td>
                     <div className="font-medium">{j.customer}</div>
-                    <div className="line-clamp-1 max-w-xs text-xs text-slate-400">{j.address}</div>
+                    <div className="line-clamp-1 max-w-sm text-xs text-mute">{j.address}</div>
                   </td>
-                  <td className="px-4 py-3">{j.type === "reparo" ? "Reparo" : "Instalação"}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-full px-2 py-0.5 text-xs font-medium text-slate-950" style={{ background: JOB_COLOR[j.status] }}>{JOB_LABEL[j.status]}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <select className={`${input} !py-1 text-xs`} value={j.installerId ?? ""} disabled={j.status !== "pendente"} onChange={(e) => assign(j.id, e.target.value)}>
+                  <td>{j.type === "reparo" ? "Reparo" : "Instalação"}</td>
+                  <td><Status color={JOB_COLOR[j.status]} label={JOB_LABEL[j.status]} /></td>
+                  <td>
+                    <select className="field !h-7 min-w-40 !text-xs" value={j.installerId ?? ""} disabled={j.status !== "pendente"} onChange={(e) => assign(j.id, e.target.value)}>
                       <option value="">Sem instalador</option>
                       {installers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => remove(j.id)} className="rounded-lg bg-red-500/20 px-2 py-1 text-xs text-red-300">Excluir</button>
-                  </td>
+                  <td className="text-right"><button onClick={() => remove(j.id)} className="btn btn-sm btn-danger">Excluir</button></td>
                 </tr>
               ))}
-              {!jobs.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Nenhum serviço hoje.</td></tr>}
+              {!jobs.length && <tr><td colSpan={6} className="!py-8 text-center text-dim">Nenhum serviço hoje.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -179,31 +199,58 @@ export function TeamPanel({ reload }: { reload: () => void }) {
   }
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[380px_1fr]">
-      <form onSubmit={add} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-900 p-4">
-        <h3 className="text-sm font-semibold">Novo instalador</h3>
-        <input className={input} placeholder="Nome" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input className={input} type="email" placeholder="E-mail (login)" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input className={input} type="password" placeholder="Senha (mín. 6)" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        <button className="rounded-lg bg-emerald-500 py-2 text-sm font-medium text-slate-950">Cadastrar</button>
-        {msg && <p className="text-xs text-slate-300">{msg}</p>}
+    <div className="grid items-start gap-5 lg:grid-cols-[340px_1fr]">
+      <form onSubmit={add} className="panel">
+        <div className="panel-head"><span className="label">Novo instalador</span></div>
+        <div className="flex flex-col gap-3 p-3">
+          <Field label="Nome">
+            <input className="field" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <Field label="E-mail (login)">
+            <input className="field" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </Field>
+          <Field label="Senha (mín. 6)">
+            <input className="field" type="password" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          </Field>
+          <button className="btn btn-primary mt-1">Cadastrar instalador</button>
+          {msg && <p className="text-xs text-mute">{msg}</p>}
+        </div>
       </form>
-      <ul className="flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-900 p-3">
-        {team.map((m) => (
-          <li key={m.id} className="rounded-lg border border-white/10 p-3 text-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className={m.active ? "font-medium" : "font-medium text-slate-500 line-through"}>{m.name}</div>
-                <div className="text-xs text-slate-400">{m.email}</div>
-              </div>
-              <div className="flex gap-1 text-xs">
-                <button onClick={() => resetPassword(m)} className="rounded bg-slate-700 px-2 py-1">Senha</button>
-                <button onClick={() => toggle(m)} className="rounded bg-slate-700 px-2 py-1">{m.active ? "Desativar" : "Ativar"}</button>
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+
+      <section className="panel overflow-hidden">
+        <div className="panel-head">
+          <span className="label">Instaladores</span>
+          <span className="num text-[11px] text-mute">{team.filter((m) => m.active).length}/{team.length} ativos</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Login</th>
+                <th>Situação</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {team.map((m) => (
+                <tr key={m.id}>
+                  <td className={m.active ? "font-medium" : "text-dim"}>{m.name}</td>
+                  <td className="num text-xs text-mute">{m.email}</td>
+                  <td><Status color={m.active ? "#34d399" : "#5c5c66"} label={m.active ? "Ativo" : "Inativo"} /></td>
+                  <td>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => resetPassword(m)} className="btn btn-sm">Alterar senha</button>
+                      <button onClick={() => toggle(m)} className={`btn btn-sm ${m.active ? "btn-danger" : ""}`}>{m.active ? "Desativar" : "Ativar"}</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!team.length && <tr><td colSpan={4} className="!py-8 text-center text-dim">Nenhum instalador cadastrado.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

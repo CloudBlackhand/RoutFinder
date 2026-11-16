@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Brand, Status } from "@/components/ui";
 import { JOB_COLOR, JOB_LABEL, type JobStatus } from "@/lib/status";
 import { enqueue, flush } from "@/lib/queue";
 import { isWithinGeofence } from "@/lib/geo";
@@ -103,54 +104,72 @@ export default function InstallerPage() {
   }
 
   const jobs = data?.jobs ?? [];
+  const done = jobs.filter((j) => j.status === "concluido").length;
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-4 bg-slate-950 p-4 text-slate-100">
-      <header className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Olá, {data?.name ?? "..."}</h1>
-        <button onClick={logout} className="text-xs text-slate-400">Sair</button>
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col">
+      <header className="sticky top-0 z-10 flex h-12 items-center justify-between border-b border-line bg-panel px-4">
+        <Brand />
+        <button onClick={logout} className="btn btn-sm">Sair</button>
       </header>
 
-      {!tracking ? (
-        <div className="rounded-xl border border-white/10 bg-slate-900 p-4 text-sm">
-          <p className="text-slate-300">Ao iniciar o turno, sua localização será compartilhada com a gestão enquanto o app estiver aberto. O rastreio termina ao encerrar o turno ou sair.</p>
-          <button onClick={start} className="mt-3 w-full rounded-lg bg-emerald-500 py-3 font-semibold text-slate-950">Aceitar e iniciar turno</button>
+      <div className="flex flex-col gap-4 p-4">
+        <div className="flex items-end justify-between border-b border-line pb-3">
+          <div>
+            <div className="label">Rota de hoje</div>
+            <h1 className="mt-1 text-lg font-semibold tracking-tight">{data?.name ?? "..."}</h1>
+          </div>
+          <span className="num text-xs text-mute">{done}/{jobs.length} concluídos</span>
         </div>
-      ) : (
-        <div className="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
-          <span>GPS ativo{pending > 0 ? ` · ${pending} pendente(s)` : ""}</span>
-          <button onClick={stop} className="rounded-lg bg-slate-800 px-3 py-1 text-xs">Encerrar turno</button>
-        </div>
-      )}
-      {error && <p className="text-sm text-red-400">{error}</p>}
 
-      <InstallerMap jobs={jobs} route={data?.route?.geometry ?? null} me={me} />
+        {!tracking ? (
+          <div className="panel p-4">
+            <div className="label">Rastreamento</div>
+            <p className="mt-2 text-[13px] leading-relaxed text-mute">Ao iniciar o turno, sua localização será compartilhada com a gestão enquanto o app estiver aberto. O rastreio termina ao encerrar o turno ou sair.</p>
+            <button onClick={start} className="btn btn-primary mt-4 !h-11 w-full !text-sm">Aceitar e iniciar turno</button>
+          </div>
+        ) : (
+          <div className="panel flex items-center justify-between border-l-2 !border-l-emerald-400 p-3">
+            <span className="num flex items-center gap-2 text-[11px] uppercase tracking-wider">
+              <span className="h-1.5 w-1.5 animate-pulse bg-emerald-400" />
+              GPS ativo{pending > 0 ? ` · ${pending} na fila` : ""}
+            </span>
+            <button onClick={stop} className="btn btn-sm">Encerrar turno</button>
+          </div>
+        )}
+        {error && <p className="border-l-2 border-red-500 pl-2 text-xs text-red-400">{error}</p>}
 
-      <ul className="flex flex-col gap-3">
-        {jobs.map((j) => (
-          <li key={j.id} className="rounded-xl border border-white/10 bg-slate-900 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-medium">{j.stopOrder ? `${j.stopOrder}. ` : ""}{j.customer}</div>
-                <div className="text-xs text-slate-400">{j.address}</div>
-                <div className="text-xs text-slate-500">{j.type === "reparo" ? "Reparo" : "Instalação"}{j.phone ? ` · ${j.phone}` : ""}</div>
+        <InstallerMap jobs={jobs} route={data?.route?.geometry ?? null} me={me} />
+
+        <ul className="flex flex-col gap-3">
+          {jobs.map((j) => (
+            <li key={j.id} className={`panel ${j.status === "concluido" ? "opacity-60" : ""}`}>
+              <div className="panel-head">
+                <span className="label">Parada {j.stopOrder ? String(j.stopOrder).padStart(2, "0") : "--"} · {j.type === "reparo" ? "Reparo" : "Instalação"}</span>
+                <Status color={JOB_COLOR[j.status]} label={JOB_LABEL[j.status]} />
               </div>
-              <span className="rounded-full px-2 py-0.5 text-xs font-medium text-slate-950" style={{ background: JOB_COLOR[j.status] }}>{JOB_LABEL[j.status]}</span>
-            </div>
-            {nearJob === j.id && j.status === "a_caminho" && <p className="mt-2 text-xs text-emerald-400">Você chegou ao local. Inicie o atendimento.</p>}
-            <div className="mt-3 flex gap-2">
-              {j.status === "pendente" && <Btn onClick={() => act(j.id, "a_caminho")}>Ir para cá</Btn>}
-              {j.status === "a_caminho" && <Btn onClick={() => act(j.id, "iniciar")}>{j.arrivedAt ? "Iniciar atendimento" : "Cheguei e iniciar"}</Btn>}
-              {j.status === "em_andamento" && <Btn onClick={() => act(j.id, "concluir")}>Concluir</Btn>}
-              <a className="rounded-lg bg-slate-800 px-3 py-2 text-xs" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${j.lat},${j.lng}`}>Navegar</a>
-            </div>
-          </li>
-        ))}
-        {data && !jobs.length && <li className="text-sm text-slate-500">Nenhum serviço atribuído para hoje.</li>}
-      </ul>
+              <div className="p-3">
+                <div className="text-[15px] font-medium">{j.customer}</div>
+                <div className="mt-0.5 text-xs leading-snug text-mute">{j.address}</div>
+                {j.phone && <a href={`tel:${j.phone}`} className="num mt-1 inline-block text-xs text-mute underline">{j.phone}</a>}
+                {nearJob === j.id && j.status === "a_caminho" && <p className="mt-2 border-l-2 border-emerald-400 pl-2 text-xs text-emerald-400">Você chegou ao local. Inicie o atendimento.</p>}
+                {j.status !== "concluido" && (
+                  <div className="mt-3 flex gap-2">
+                    {j.status === "pendente" && <Btn onClick={() => act(j.id, "a_caminho")}>Ir para cá</Btn>}
+                    {j.status === "a_caminho" && <Btn onClick={() => act(j.id, "iniciar")}>{j.arrivedAt ? "Iniciar atendimento" : "Cheguei e iniciar"}</Btn>}
+                    {j.status === "em_andamento" && <Btn onClick={() => act(j.id, "concluir")}>Concluir</Btn>}
+                    <a className="btn !h-10" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${j.lat},${j.lng}`}>Navegar</a>
+                  </div>
+                )}
+              </div>
+            </li>
+          ))}
+          {data && !jobs.length && <li className="panel p-6 text-center text-dim">Nenhum serviço atribuído para hoje.</li>}
+        </ul>
+      </div>
     </main>
   );
 }
 
 function Btn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return <button onClick={onClick} className="flex-1 rounded-lg bg-sky-500 py-2 text-sm font-medium text-slate-950">{children}</button>;
+  return <button onClick={onClick} className="btn btn-primary !h-10 flex-1">{children}</button>;
 }

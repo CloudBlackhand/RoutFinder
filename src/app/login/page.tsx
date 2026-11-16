@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Brand } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,14 +22,28 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-4 text-slate-100">
-      <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900 p-6">
-        <h1 className="text-xl font-semibold">Finder</h1>
-        <p className="text-sm text-slate-400">Rotas e rastreamento de instaladores</p>
-        <input name="email" type="email" required placeholder="E-mail" className="rounded-lg bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
-        <input name="password" type="password" required placeholder="Senha" className="rounded-lg bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        <button disabled={busy} className="rounded-lg bg-sky-500 py-2 font-medium text-slate-950 disabled:opacity-50">{busy ? "Entrando..." : "Entrar"}</button>
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <form onSubmit={submit} className="panel w-full max-w-sm">
+        <div className="panel-head !h-12">
+          <Brand />
+          <span className="label">Acesso</span>
+        </div>
+        <div className="flex flex-col gap-4 p-5">
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight">Entrar</h1>
+            <p className="mt-1 text-xs text-mute">Rotas e monitoramento de equipes de instalação.</p>
+          </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="label">E-mail</span>
+            <input name="email" type="email" required autoComplete="username" className="field !h-9" />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label">Senha</span>
+            <input name="password" type="password" required autoComplete="current-password" className="field !h-9" />
+          </label>
+          {error && <p className="border-l-2 border-red-500 pl-2 text-xs text-red-400">{error}</p>}
+          <button disabled={busy} className="btn btn-primary !h-9">{busy ? "Entrando..." : "Entrar"}</button>
+        </div>
       </form>
     </main>
   );

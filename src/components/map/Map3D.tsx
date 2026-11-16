@@ -8,7 +8,7 @@ import { JOB_COLOR, STATE_COLOR, STATE_LABEL, installerState, type LiveData } fr
 
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
-export const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+export const MAP_STYLE = "https://tiles.openfreemap.org/styles/dark";
 
 type Props = { data: LiveData | null; selected: Picked; onSelect: (p: Picked) => void; trail: [number, number][]; focus: [number, number] | null };
 
@@ -34,10 +34,27 @@ export default function Map3D({ data, selected, onSelect, trail, focus }: Props)
     map.current = m;
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     m.on("load", () => {
+      const firstSymbol = m.getStyle().layers.find((l) => l.type === "symbol")?.id;
+      m.addLayer(
+        {
+          id: "buildings-3d",
+          type: "fill-extrusion",
+          source: "openmaptiles",
+          "source-layer": "building",
+          minzoom: 13.5,
+          paint: {
+            "fill-extrusion-color": "#2b2b31",
+            "fill-extrusion-height": ["coalesce", ["get", "render_height"], 8],
+            "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+            "fill-extrusion-opacity": 0.9,
+          },
+        },
+        firstSymbol,
+      );
       m.addSource("routes", { type: "geojson", data: lines([]) });
       m.addSource("trail", { type: "geojson", data: lines([]) });
-      m.addLayer({ id: "routes", type: "line", source: "routes", paint: { "line-color": "#38bdf8", "line-width": 4, "line-opacity": 0.8, "line-dasharray": [2, 1] } });
-      m.addLayer({ id: "trail", type: "line", source: "trail", paint: { "line-color": "#22c55e", "line-width": 5, "line-opacity": 0.9 } });
+      m.addLayer({ id: "routes", type: "line", source: "routes", paint: { "line-color": "#7dd3fc", "line-width": 3, "line-opacity": 0.85, "line-dasharray": [2, 1.5] } });
+      m.addLayer({ id: "trail", type: "line", source: "trail", paint: { "line-color": "#34d399", "line-width": 4, "line-opacity": 0.95 } });
       m.on("click", (e) => onSelectRef.current(layer.current?.pick(e.point.x, e.point.y) ?? null));
       m.on("render", updateLabels);
       ready.current = true;
@@ -63,12 +80,12 @@ export default function Map3D({ data, selected, onSelect, trail, focus }: Props)
       let l = labels.current.get(p.id);
       if (!l) {
         const el = document.createElement("div");
-        el.className = "pointer-events-none flex items-center gap-1.5 rounded-full border border-white/20 bg-slate-900/90 px-2.5 py-1 text-xs font-medium text-white shadow-lg";
+        el.className = "pointer-events-none flex items-center gap-1.5 whitespace-nowrap border border-line bg-panel/95 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-fg";
         l = { el, marker: new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, -30] }).setLngLat([p.lng, p.lat]).addTo(m) };
         labels.current.set(p.id, l);
       }
       l.marker.setLngLat([p.lng, p.lat]);
-      const html = `<span style="background:${STATE_COLOR[state]}" class="h-2 w-2 rounded-full"></span>${p.name} · ${STATE_LABEL[state]}`;
+      const html = `<span style="background:${STATE_COLOR[state]}" class="h-1.5 w-1.5"></span>${p.name} / ${STATE_LABEL[state]}`;
       if (l.el.dataset.h !== html) {
         l.el.dataset.h = html;
         l.el.innerHTML = html;

@@ -22,7 +22,7 @@ export default function InstallerMap({ jobs, route, me }: Props) {
     map.current = m;
     m.on("load", () => {
       m.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      m.addLayer({ id: "route", type: "line", source: "route", paint: { "line-color": "#38bdf8", "line-width": 5 } });
+      m.addLayer({ id: "route", type: "line", source: "route", paint: { "line-color": "#7dd3fc", "line-width": 4 } });
       loaded.current = true;
     });
     return () => m.remove();
@@ -35,7 +35,7 @@ export default function InstallerMap({ jobs, route, me }: Props) {
       markers.current.forEach((k) => k.remove());
       markers.current = jobs.map((j) => {
         const d = document.createElement("div");
-        d.className = "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-bold text-slate-900";
+        d.className = "flex h-6 w-6 items-center justify-center border border-bg font-mono text-[11px] font-semibold text-bg";
         d.style.background = JOB_COLOR[j.status];
         d.textContent = String(j.stopOrder ?? "•");
         return new maplibregl.Marker({ element: d }).setLngLat([j.lng, j.lat]).addTo(m);
@@ -60,10 +60,10 @@ export default function InstallerMap({ jobs, route, me }: Props) {
     if (!m || !me) return;
     if (!meMarker.current) {
       const d = document.createElement("div");
-      d.className = "h-4 w-4 rounded-full border-2 border-white bg-blue-500 shadow-[0_0_0_6px_rgba(59,130,246,.3)]";
+      d.className = "h-3.5 w-3.5 rotate-45 border-2 border-bg bg-fg shadow-[0_0_0_5px_rgba(237,237,240,.2)]";
       meMarker.current = new maplibregl.Marker({ element: d }).setLngLat([me.lng, me.lat]).addTo(m);
     } else meMarker.current.setLngLat([me.lng, me.lat]);
   }, [me]);
 
-  return <div ref={el} className="h-64 w-full overflow-hidden rounded-xl" />;
+  return <div ref={el} className="h-64 w-full border border-line" />;
 }
