@@ -63,7 +63,7 @@ export default function MonitoringPage() {
   const route = selRow ? data?.routes.find((x) => x.installerId === selRow.id) : null;
 
   return (
-    <div className="grid h-[calc(100vh-3rem)] grid-cols-1 lg:grid-cols-[280px_1fr_320px]">
+    <div className="grid h-screen grid-cols-1 lg:grid-cols-[280px_1fr_320px]">
       <aside className="hidden min-h-0 flex-col border-r border-line bg-panel lg:flex">
         <div className="panel-head shrink-0">
           <span className="label">Unidades</span>
