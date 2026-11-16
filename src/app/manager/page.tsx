@@ -1,197 +1,135 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { Picked } from "@/components/map/FinderLayer";
-import { JobsPanel, TeamPanel } from "./panels";
-import { JOB_COLOR, JOB_LABEL, STATE_COLOR, STATE_LABEL, fmtDuration, installerState, jobStats, type LiveData } from "@/lib/status";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { JOB_COLOR, JOB_LABEL, STATE_COLOR, STATE_LABEL, fmtDuration, installerState, jobStats, type JobStatus } from "@/lib/status";
+import { useLive } from "./shell";
 
-const Map3D = dynamic(() => import("@/components/map/Map3D"), { ssr: false });
-const POLL_MS = 4000;
-
-export default function ManagerPage() {
-  const router = useRouter();
-  const [data, setData] = useState<LiveData | null>(null);
-  const [selected, setSelected] = useState<Picked>(null);
-  const [trail, setTrail] = useState<[number, number][]>([]);
-  const [focus, setFocus] = useState<[number, number] | null>(null);
+export default function OverviewPage() {
+  const { data, reload } = useLive();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const [tab, setTab] = useState<"painel" | "servicos" | "equipe">("painel");
-
-  const load = useCallback(async () => {
-    const r = await fetch("/api/manager/live", { cache: "no-store" });
-    if (r.status === 401) return router.replace("/login");
-    if (r.ok) setData(await r.json());
-  }, [router]);
-
-  useEffect(() => {
-    const t0 = setTimeout(load, 0);
-    const t = setInterval(load, POLL_MS);
-    return () => {
-      clearTimeout(t0);
-      clearInterval(t);
-    };
-  }, [load]);
-
-  const selInstaller = selected?.kind === "installer" ? selected.id : null;
-  useEffect(() => {
-    if (selInstaller == null) return;
-    let alive = true;
-    const run = async () => {
-      const r = await fetch(`/api/manager/trail/${selInstaller}`, { cache: "no-store" });
-      if (alive && r.ok) setTrail(((await r.json()).points as { lat: number; lng: number }[]).map((p) => [p.lng, p.lat]));
-    };
-    run();
-    const t = setInterval(run, 10000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-      setTrail([]);
-    };
-  }, [selInstaller]);
-
   const now = data?.now ?? 0;
+  const stats = useMemo(() => jobStats(data?.jobs ?? [], now), [data, now]);
+
   const rows = useMemo(
     () =>
       (data?.installers ?? []).map((i) => {
         const pos = data!.positions.find((p) => p.installerId === i.id);
         const jobs = data!.jobs.filter((j) => j.installerId === i.id);
-        return { ...i, pos, jobs, state: installerState(pos, jobs, now) };
+        const current = jobs.find((j) => j.status === "em_andamento") ?? jobs.find((j) => j.status === "a_caminho");
+        const since = current ? current.startedAt ?? current.arrivedAt ?? current.startedRouteAt : null;
+        const route = data!.routes.find((r) => r.installerId === i.id);
+        return { ...i, pos, jobs, current, since, route, state: installerState(pos, jobs, now) };
       }),
     [data, now],
   );
-  const stats = useMemo(() => jobStats(data?.jobs ?? [], now), [data, now]);
+
+  const byStatus = (s: JobStatus) => (data?.jobs ?? []).filter((j) => j.status === s).length;
+  const unassigned = (data?.jobs ?? []).filter((j) => j.installerId == null && j.status === "pendente").length;
+  const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
 
   async function optimize() {
     setBusy(true);
     setMsg("");
     const r = await fetch("/api/manager/optimize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ autoAssign: true }) });
     const j = await r.json();
-    setMsg(r.ok ? `Rotas geradas para ${j.summary.length} instalador(es)` : j.error ?? "Erro");
+    setMsg(r.ok ? `Rotas geradas para ${j.summary.length} instalador(es).` : j.error ?? "Erro ao otimizar");
     setBusy(false);
-    load();
+    reload();
   }
-
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.replace("/login");
-  }
-
-  const pick = (p: Picked) => {
-    setSelected(p);
-    if (!p || !data) return;
-    if (p.kind === "installer") {
-      const pos = data.positions.find((x) => x.installerId === p.id);
-      if (pos) setFocus([pos.lng, pos.lat]);
-    } else {
-      const j = data.jobs.find((x) => x.id === p.id);
-      if (j) setFocus([j.lng, j.lat]);
-    }
-  };
-
-  const selRow = selInstaller != null ? rows.find((r) => r.id === selInstaller) : null;
-  const selJob = selected?.kind === "job" ? data?.jobs.find((j) => j.id === selected.id) : null;
-  const activeJob = selRow?.jobs.find((j) => j.status === "em_andamento") ?? selRow?.jobs.find((j) => j.status === "a_caminho");
-  const since = activeJob ? activeJob.startedAt ?? activeJob.arrivedAt ?? activeJob.startedRouteAt : null;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
-      <Map3D data={data} selected={selected} onSelect={pick} trail={trail} focus={focus} />
-
-      <aside className="absolute left-3 top-3 bottom-3 flex w-96 flex-col gap-3 overflow-y-auto rounded-xl border border-white/10 bg-slate-900/85 p-4 backdrop-blur">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Finder · Gestão</h1>
-          <button onClick={logout} className="text-xs text-slate-400 hover:text-white">Sair</button>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Visão geral de hoje</h1>
+          <p className="text-sm text-slate-400">Atualiza automaticamente a cada poucos segundos.</p>
         </div>
-
-        <nav className="grid grid-cols-3 gap-1 rounded-lg bg-white/5 p-1 text-xs">
-          {([["painel", "Painel"], ["servicos", "Serviços"], ["equipe", "Equipe"]] as const).map(([k, l]) => (
-            <button key={k} onClick={() => setTab(k)} className={`rounded-md py-1.5 ${tab === k ? "bg-sky-500 font-medium text-slate-950" : "text-slate-300"}`}>{l}</button>
-          ))}
-        </nav>
-
-        {tab === "servicos" && <JobsPanel data={data} reload={load} onFocus={(id) => pick({ kind: "job", id })} />}
-        {tab === "equipe" && <TeamPanel reload={load} />}
-        {tab === "painel" && (
-          <>
-        <div className="grid grid-cols-2 gap-2 text-center text-xs">
-          <Kpi label="Concluídos" value={`${stats.done}/${stats.total}`} />
-          <Kpi label="Em atendimento" value={String(stats.active)} />
-          <Kpi label="Tempo médio/cliente" value={stats.avgService ? fmtDuration(stats.avgService) : "-"} />
-          <Kpi label="Deslocamento médio" value={stats.avgTravel ? fmtDuration(stats.avgTravel) : "-"} />
+        <div className="flex items-center gap-3">
+          {msg && <span className="text-sm text-slate-300">{msg}</span>}
+          <button onClick={optimize} disabled={busy} className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 disabled:opacity-50">
+            {busy ? "Calculando..." : "Atribuir e otimizar rotas"}
+          </button>
         </div>
+      </div>
 
-        <button onClick={optimize} disabled={busy} className="rounded-lg bg-sky-500 px-3 py-2 text-sm font-medium text-slate-950 disabled:opacity-50">
-          {busy ? "Calculando..." : "Atribuir e otimizar rotas"}
-        </button>
-        {msg && <p className="text-xs text-slate-300">{msg}</p>}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card label="Concluídos" value={`${stats.done}/${stats.total}`} hint={`${pct}% do dia`} />
+        <Card label="Em atendimento" value={String(stats.active)} hint={`${byStatus("a_caminho")} a caminho`} />
+        <Card label="Tempo médio por cliente" value={stats.avgService ? fmtDuration(stats.avgService) : "-"} hint="serviços concluídos" />
+        <Card label="Deslocamento médio" value={stats.avgTravel ? fmtDuration(stats.avgTravel) : "-"} hint={unassigned ? `${unassigned} sem instalador` : "tudo atribuído"} />
+      </section>
 
-        <h2 className="mt-1 text-xs uppercase tracking-wide text-slate-400">Instaladores</h2>
-        <ul className="flex flex-col gap-2">
-          {rows.map((r) => (
-            <li key={r.id}>
-              <button onClick={() => pick({ kind: "installer", id: r.id })} className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${selInstaller === r.id ? "border-sky-400 bg-sky-400/10" : "border-white/10 hover:bg-white/5"}`}>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{r.name}</span>
-                  <span className="flex items-center gap-1 text-xs" style={{ color: STATE_COLOR[r.state] }}>
-                    <span className="h-2 w-2 rounded-full" style={{ background: STATE_COLOR[r.state] }} />
-                    {STATE_LABEL[r.state]}
-                  </span>
-                </div>
-                <div className="text-xs text-slate-400">{r.jobs.filter((j) => j.status === "concluido").length}/{r.jobs.length} serviços</div>
-              </button>
-            </li>
-          ))}
-          {!rows.length && <li className="text-xs text-slate-500">Carregando...</li>}
-        </ul>
-          </>
-        )}
-      </aside>
+      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+      </div>
 
-      {(selRow || selJob) && (
-        <section className="absolute right-3 bottom-3 w-80 rounded-xl border border-white/10 bg-slate-900/90 p-4 text-sm backdrop-blur">
-          <button onClick={() => pick(null)} className="float-right text-xs text-slate-400 hover:text-white">fechar</button>
-          {selRow && (
-            <>
-              <h3 className="text-base font-semibold">{selRow.name}</h3>
-              <p style={{ color: STATE_COLOR[selRow.state] }}>{STATE_LABEL[selRow.state]}</p>
-              <dl className="mt-2 grid grid-cols-2 gap-y-1 text-xs text-slate-300">
-                <dt>Velocidade</dt><dd>{selRow.pos ? `${Math.round((selRow.pos.speed ?? 0) * 3.6)} km/h` : "-"}</dd>
-                <dt>Última posição</dt><dd>{selRow.pos ? `${Math.round((now - new Date(selRow.pos.ts).getTime()) / 1000)}s atrás` : "-"}</dd>
-                <dt>Cliente atual</dt><dd>{activeJob?.customer ?? "-"}</dd>
-                <dt>{activeJob?.status === "em_andamento" ? "Tempo no cliente" : "Em rota há"}</dt><dd>{since ? fmtDuration(now - new Date(since).getTime()) : "-"}</dd>
-                <dt>Restantes</dt><dd>{selRow.jobs.filter((j) => j.status !== "concluido").length}</dd>
-                <dt>Rota planejada</dt><dd>{(() => { const rt = data?.routes.find((x) => x.installerId === selRow.id); return rt ? `${(rt.distanceM / 1000).toFixed(1)} km · ${fmtDuration(rt.durationS * 1000)}` : "-"; })()}</dd>
-              </dl>
-            </>
-          )}
-          {selJob && (
-            <>
-              <h3 className="text-base font-semibold">{selJob.customer}</h3>
-              <p className="text-xs text-slate-400">{selJob.address}</p>
-              <p className="mt-1" style={{ color: JOB_COLOR[selJob.status] }}>{JOB_LABEL[selJob.status]} · {selJob.type === "reparo" ? "Reparo" : "Instalação"}</p>
-              <dl className="mt-2 grid grid-cols-2 gap-y-1 text-xs text-slate-300">
-                <dt>Instalador</dt><dd>{data?.installers.find((i) => i.id === selJob.installerId)?.name ?? "Não atribuído"}</dd>
-                <dt>Parada</dt><dd>{selJob.stopOrder ?? "-"}</dd>
-                <dt>Telefone</dt><dd>{selJob.phone ?? "-"}</dd>
-                <dt>Chegada</dt><dd>{selJob.arrivedAt ? new Date(selJob.arrivedAt).toLocaleTimeString("pt-BR") : "-"}</dd>
-                <dt>Duração</dt><dd>{selJob.startedAt ? fmtDuration(new Date(selJob.finishedAt ?? now).getTime() - new Date(selJob.startedAt).getTime()) : "-"}</dd>
-              </dl>
-            </>
-          )}
-        </section>
-      )}
+      <section className="overflow-hidden rounded-xl border border-white/10 bg-slate-900">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <h2 className="font-semibold">Equipe agora</h2>
+          <Link href="/manager/mapa" className="text-sm text-sky-400 hover:underline">Ver no mapa 3D</Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs uppercase text-slate-400">
+              <tr>
+                <th className="px-4 py-2">Instalador</th>
+                <th className="px-4 py-2">Estado</th>
+                <th className="px-4 py-2">Cliente atual</th>
+                <th className="px-4 py-2">Tempo</th>
+                <th className="px-4 py-2">Progresso</th>
+                <th className="px-4 py-2">Velocidade</th>
+                <th className="px-4 py-2">Rota planejada</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {rows.map((r) => {
+                const done = r.jobs.filter((j) => j.status === "concluido").length;
+                return (
+                  <tr key={r.id}>
+                    <td className="px-4 py-3 font-medium">{r.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5" style={{ color: STATE_COLOR[r.state] }}>
+                        <span className="h-2 w-2 rounded-full" style={{ background: STATE_COLOR[r.state] }} />
+                        {STATE_LABEL[r.state]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">{r.current?.customer ?? "-"}</td>
+                    <td className="px-4 py-3">{r.since ? fmtDuration(now - new Date(r.since).getTime()) : "-"}</td>
+                    <td className="px-4 py-3">{done}/{r.jobs.length}</td>
+                    <td className="px-4 py-3">{r.pos ? `${Math.round((r.pos.speed ?? 0) * 3.6)} km/h` : "-"}</td>
+                    <td className="px-4 py-3">{r.route ? `${(r.route.distanceM / 1000).toFixed(1)} km · ${fmtDuration(r.route.durationS * 1000)}` : "-"}</td>
+                  </tr>
+                );
+              })}
+              {!rows.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">{data ? "Nenhum instalador ativo. Cadastre na aba Equipe." : "Carregando..."}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {(Object.keys(JOB_LABEL) as JobStatus[]).map((s) => (
+          <div key={s} className="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900 p-4">
+            <span className="h-3 w-3 rounded-full" style={{ background: JOB_COLOR[s] }} />
+            <div>
+              <div className="text-xl font-semibold">{byStatus(s)}</div>
+              <div className="text-xs text-slate-400">{JOB_LABEL[s]}</div>
+            </div>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Card({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-lg bg-white/5 p-2">
-      <div className="text-base font-semibold">{value}</div>
-      <div className="text-slate-400">{label}</div>
+    <div className="rounded-xl border border-white/10 bg-slate-900 p-4">
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className="mt-1 text-2xl font-semibold">{value}</div>
+      <div className="text-xs text-slate-500">{hint}</div>
     </div>
   );
 }

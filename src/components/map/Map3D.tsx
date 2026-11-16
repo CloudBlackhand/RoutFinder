@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { FinderLayer, type Picked } from "./FinderLayer";
-import { JOB_COLOR, STATE_COLOR, installerState, type LiveData } from "@/lib/status";
+import { JOB_COLOR, STATE_COLOR, STATE_LABEL, installerState, type LiveData } from "@/lib/status";
 
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
@@ -20,6 +20,7 @@ export default function Map3D({ data, selected, onSelect, trail, focus }: Props)
   const map = useRef<maplibregl.Map | null>(null);
   const layer = useRef<FinderLayer | null>(null);
   const ready = useRef(false);
+  const labels = useRef(new Map<number, { marker: maplibregl.Marker; el: HTMLDivElement }>());
   const fitted = useRef(false);
   const onSelectRef = useRef(onSelect);
   const latest = useRef({ data, trail });
@@ -38,14 +39,47 @@ export default function Map3D({ data, selected, onSelect, trail, focus }: Props)
       m.addLayer({ id: "routes", type: "line", source: "routes", paint: { "line-color": "#38bdf8", "line-width": 4, "line-opacity": 0.8, "line-dasharray": [2, 1] } });
       m.addLayer({ id: "trail", type: "line", source: "trail", paint: { "line-color": "#22c55e", "line-width": 5, "line-opacity": 0.9 } });
       m.on("click", (e) => onSelectRef.current(layer.current?.pick(e.point.x, e.point.y) ?? null));
+      m.on("render", updateLabels);
       ready.current = true;
       sync();
     });
+    const labelMap = labels.current;
     return () => {
       ready.current = false;
+      labelMap.clear();
       m.remove();
     };
   }, []);
+
+  function updateLabels() {
+    const m = map.current;
+    const d = latest.current.data;
+    if (!m || !layer.current || !d) return;
+    const seen = new Set<number>();
+    for (const p of layer.current.getPositions()) {
+      seen.add(p.id);
+      const pos = d.positions.find((x) => x.installerId === p.id);
+      const state = installerState(pos, d.jobs.filter((j) => j.installerId === p.id), d.now);
+      let l = labels.current.get(p.id);
+      if (!l) {
+        const el = document.createElement("div");
+        el.className = "pointer-events-none flex items-center gap-1.5 rounded-full border border-white/20 bg-slate-900/90 px-2.5 py-1 text-xs font-medium text-white shadow-lg";
+        l = { el, marker: new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, -30] }).setLngLat([p.lng, p.lat]).addTo(m) };
+        labels.current.set(p.id, l);
+      }
+      l.marker.setLngLat([p.lng, p.lat]);
+      const html = `<span style="background:${STATE_COLOR[state]}" class="h-2 w-2 rounded-full"></span>${p.name} · ${STATE_LABEL[state]}`;
+      if (l.el.dataset.h !== html) {
+        l.el.dataset.h = html;
+        l.el.innerHTML = html;
+      }
+    }
+    for (const [id, l] of labels.current) {
+      if (seen.has(id)) continue;
+      l.marker.remove();
+      labels.current.delete(id);
+    }
+  }
 
   function sync() {
     const m = map.current;
@@ -64,6 +98,7 @@ export default function Map3D({ data, selected, onSelect, trail, focus }: Props)
         lat: p.lat,
         lng: p.lng,
         heading: p.heading ?? 0,
+        name: d.installers.find((i) => i.id === p.installerId)?.name ?? "",
         color: STATE_COLOR[installerState(p, d.jobs.filter((j) => j.installerId === p.installerId), d.now)],
       })),
     );

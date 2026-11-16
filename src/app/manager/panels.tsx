@@ -9,7 +9,7 @@ const post = (url: string, method: string, body?: unknown) =>
 
 type Hit = { label: string; lat: number; lng: number };
 
-export function JobsPanel({ data, reload, onFocus }: { data: LiveData | null; reload: () => void; onFocus: (id: number) => void }) {
+export function JobsPanel({ data, reload }: { data: LiveData | null; reload: () => void }) {
   const [form, setForm] = useState({ name: "", phone: "", address: "", type: "instalacao", installerId: "" });
   const [hits, setHits] = useState<Hit[]>([]);
   const [place, setPlace] = useState<Hit | null>(null);
@@ -62,8 +62,8 @@ export function JobsPanel({ data, reload, onFocus }: { data: LiveData | null; re
   const jobs = [...(data?.jobs ?? [])].sort((a, b) => (a.installerId ?? 0) - (b.installerId ?? 0) || (a.stopOrder ?? 99) - (b.stopOrder ?? 99));
 
   return (
-    <div className="flex flex-col gap-3">
-      <form onSubmit={create} className="flex flex-col gap-2 rounded-lg border border-white/10 p-3">
+    <div className="grid items-start gap-6 lg:grid-cols-[380px_1fr]">
+      <form onSubmit={create} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-900 p-4">
         <h3 className="text-sm font-semibold">Novo serviço</h3>
         <input className={input} placeholder="Nome do cliente" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <input className={input} placeholder="Telefone (opcional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
@@ -95,28 +95,48 @@ export function JobsPanel({ data, reload, onFocus }: { data: LiveData | null; re
         {msg && <p className="text-xs text-slate-300">{msg}</p>}
       </form>
 
-      <h3 className="text-xs uppercase tracking-wide text-slate-400">Serviços de hoje ({jobs.length})</h3>
-      <ul className="flex flex-col gap-2">
-        {jobs.map((j) => (
-          <li key={j.id} className="rounded-lg border border-white/10 p-2 text-sm">
-            <div className="flex items-start justify-between gap-2">
-              <button onClick={() => onFocus(j.id)} className="text-left">
-                <div className="font-medium">{j.stopOrder ? `${j.stopOrder}. ` : ""}{j.customer}</div>
-                <div className="line-clamp-1 text-xs text-slate-400">{j.address}</div>
-              </button>
-              <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium text-slate-950" style={{ background: JOB_COLOR[j.status] }}>{JOB_LABEL[j.status]}</span>
-            </div>
-            <div className="mt-2 flex gap-2">
-              <select className={`${input} !py-1 text-xs`} value={j.installerId ?? ""} disabled={j.status !== "pendente"} onChange={(e) => assign(j.id, e.target.value)}>
-                <option value="">Sem instalador</option>
-                {installers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-              </select>
-              <button onClick={() => remove(j.id)} className="rounded-lg bg-red-500/20 px-2 text-xs text-red-300">Excluir</button>
-            </div>
-          </li>
-        ))}
-        {!jobs.length && <li className="text-xs text-slate-500">Nenhum serviço hoje.</li>}
-      </ul>
+      <section className="overflow-hidden rounded-xl border border-white/10 bg-slate-900">
+        <h2 className="border-b border-white/10 px-4 py-3 font-semibold">Serviços de hoje ({jobs.length})</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs uppercase text-slate-400">
+              <tr>
+                <th className="px-4 py-2">Parada</th>
+                <th className="px-4 py-2">Cliente</th>
+                <th className="px-4 py-2">Tipo</th>
+                <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Instalador</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {jobs.map((j) => (
+                <tr key={j.id}>
+                  <td className="px-4 py-3">{j.stopOrder ?? "-"}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium">{j.customer}</div>
+                    <div className="line-clamp-1 max-w-xs text-xs text-slate-400">{j.address}</div>
+                  </td>
+                  <td className="px-4 py-3">{j.type === "reparo" ? "Reparo" : "Instalação"}</td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full px-2 py-0.5 text-xs font-medium text-slate-950" style={{ background: JOB_COLOR[j.status] }}>{JOB_LABEL[j.status]}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <select className={`${input} !py-1 text-xs`} value={j.installerId ?? ""} disabled={j.status !== "pendente"} onChange={(e) => assign(j.id, e.target.value)}>
+                      <option value="">Sem instalador</option>
+                      {installers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => remove(j.id)} className="rounded-lg bg-red-500/20 px-2 py-1 text-xs text-red-300">Excluir</button>
+                  </td>
+                </tr>
+              ))}
+              {!jobs.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Nenhum serviço hoje.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
@@ -159,8 +179,8 @@ export function TeamPanel({ reload }: { reload: () => void }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <form onSubmit={add} className="flex flex-col gap-2 rounded-lg border border-white/10 p-3">
+    <div className="grid items-start gap-6 lg:grid-cols-[380px_1fr]">
+      <form onSubmit={add} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-900 p-4">
         <h3 className="text-sm font-semibold">Novo instalador</h3>
         <input className={input} placeholder="Nome" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <input className={input} type="email" placeholder="E-mail (login)" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -168,9 +188,9 @@ export function TeamPanel({ reload }: { reload: () => void }) {
         <button className="rounded-lg bg-emerald-500 py-2 text-sm font-medium text-slate-950">Cadastrar</button>
         {msg && <p className="text-xs text-slate-300">{msg}</p>}
       </form>
-      <ul className="flex flex-col gap-2">
+      <ul className="flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-900 p-3">
         {team.map((m) => (
-          <li key={m.id} className="rounded-lg border border-white/10 p-2 text-sm">
+          <li key={m.id} className="rounded-lg border border-white/10 p-3 text-sm">
             <div className="flex items-center justify-between">
               <div>
                 <div className={m.active ? "font-medium" : "font-medium text-slate-500 line-through"}>{m.name}</div>

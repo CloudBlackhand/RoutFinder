@@ -1,44 +1,17 @@
 import * as THREE from "three";
+import { makeHouse, makeVan } from "./models";
 import { MercatorCoordinate, type CustomLayerInterface, type Map as MlMap } from "maplibre-gl";
 
-export type InstallerView = { id: number; lat: number; lng: number; heading: number; color: string };
+export type InstallerView = { id: number; lat: number; lng: number; heading: number; color: string; name: string };
 export type JobView = { id: number; lat: number; lng: number; color: string };
 export type Picked = { kind: "installer" | "job"; id: number } | null;
 
-type Ent = { group: THREE.Group; target: THREE.Vector3; cur: THREE.Vector3; heading: number; curHeading: number };
+type Ent = { name: string; group: THREE.Group; target: THREE.Vector3; cur: THREE.Vector3; heading: number; curHeading: number };
 
 const toLocal = (lat: number, lng: number, o: { lat: number; lng: number }) => {
   const mpDegLat = 111_320;
   return new THREE.Vector3((lng - o.lng) * mpDegLat * Math.cos((o.lat * Math.PI) / 180), (lat - o.lat) * mpDegLat, 0);
 };
-
-function makeVan(color: string) {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, side: THREE.DoubleSide });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(18, 36, 16), mat);
-  body.position.z = 12;
-  const cab = new THREE.Mesh(new THREE.BoxGeometry(17, 12, 11), new THREE.MeshStandardMaterial({ color: "#e2e8f0" }));
-  cab.position.set(0, 22, 9.5);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(28, 34, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
-  ring.position.z = 0.5;
-  g.add(body, cab, ring);
-  g.userData.mat = mat;
-  g.userData.ring = ring;
-  return g;
-}
-
-function makePin(color: string) {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, side: THREE.DoubleSide });
-  const stick = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 50, 12), mat);
-  stick.rotation.x = Math.PI / 2;
-  stick.position.z = 25;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(15, 20, 16), mat);
-  head.position.z = 62;
-  g.add(stick, head);
-  g.userData.mat = mat;
-  return g;
-}
 
 export class FinderLayer implements CustomLayerInterface {
   id = "finder-3d";
@@ -47,6 +20,7 @@ export class FinderLayer implements CustomLayerInterface {
   private map!: MlMap;
   private renderer!: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
+  private root = new THREE.Group();
   private camera = new THREE.Camera();
   private raycaster = new THREE.Raycaster();
   private origin: { lat: number; lng: number };
@@ -58,7 +32,9 @@ export class FinderLayer implements CustomLayerInterface {
 
   constructor(origin: { lat: number; lng: number }) {
     this.origin = origin;
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.4));
+    this.root.scale.set(1, -1, 1);
+    this.scene.add(this.root);
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x94a3b8, 2.2));
     const sun = new THREE.DirectionalLight(0xffffff, 2);
     sun.position.set(-80, -120, 200);
     this.scene.add(sun);
@@ -78,7 +54,7 @@ export class FinderLayer implements CustomLayerInterface {
     const ids = new Set(list.map((i) => i.id));
     for (const [id, e] of this.installers) {
       if (ids.has(id)) continue;
-      this.scene.remove(e.group);
+      this.root.remove(e.group);
       this.installers.delete(id);
     }
     for (const i of list) {
@@ -88,10 +64,11 @@ export class FinderLayer implements CustomLayerInterface {
         const group = makeVan(i.color);
         group.userData = { ...group.userData, kind: "installer", id: i.id };
         group.position.copy(p);
-        this.scene.add(group);
-        e = { group, target: p.clone(), cur: p.clone(), heading: i.heading, curHeading: i.heading };
+        this.root.add(group);
+        e = { name: i.name, group, target: p.clone(), cur: p.clone(), heading: i.heading, curHeading: i.heading };
         this.installers.set(i.id, e);
       }
+      e.name = i.name;
       e.target.copy(p);
       e.heading = i.heading;
       (e.group.userData.mat as THREE.MeshStandardMaterial).color.set(i.color);
@@ -104,21 +81,27 @@ export class FinderLayer implements CustomLayerInterface {
     const ids = new Set(list.map((j) => j.id));
     for (const [id, g] of this.jobs) {
       if (ids.has(id)) continue;
-      this.scene.remove(g);
+      this.root.remove(g);
       this.jobs.delete(id);
     }
     for (const j of list) {
       let g = this.jobs.get(j.id);
       if (!g) {
-        g = makePin(j.color);
+        g = makeHouse(j.color);
         g.userData = { ...g.userData, kind: "job", id: j.id };
         g.position.copy(toLocal(j.lat, j.lng, this.origin));
-        this.scene.add(g);
+        this.root.add(g);
         this.jobs.set(j.id, g);
       }
       (g.userData.mat as THREE.MeshStandardMaterial).color.set(j.color);
     }
     this.map?.triggerRepaint();
+  }
+
+  getPositions() {
+    const o = this.origin;
+    const cos = Math.cos((o.lat * Math.PI) / 180);
+    return [...this.installers].map(([id, e]) => ({ id, name: e.name, lat: o.lat + e.cur.y / 111_320, lng: o.lng + e.cur.x / (111_320 * cos) }));
   }
 
   select(p: Picked) {
@@ -133,7 +116,7 @@ export class FinderLayer implements CustomLayerInterface {
     const near = new THREE.Vector3(nx, ny, -1).unproject(this.camera);
     const far = new THREE.Vector3(nx, ny, 1).unproject(this.camera);
     this.raycaster.set(near, far.sub(near).normalize());
-    const hits = this.raycaster.intersectObjects(this.scene.children, true);
+    const hits = this.raycaster.intersectObjects(this.root.children, true);
     for (const h of hits) {
       let o: THREE.Object3D | null = h.object;
       while (o && !o.userData.kind) o = o.parent;
@@ -148,7 +131,7 @@ export class FinderLayer implements CustomLayerInterface {
     this.last = now;
     this.pulse += dt;
     const k = 1 - Math.exp(-dt * 2.5);
-    const zoomScale = Math.pow(2, 16 - Math.min(Math.max(this.map.getZoom(), 9), 19));
+    const zoomScale = Math.max(Math.pow(2, 16 - this.map.getZoom()), 0.08);
     const sel = this.selected;
 
     for (const [id, e] of this.installers) {
@@ -163,12 +146,14 @@ export class FinderLayer implements CustomLayerInterface {
     for (const [id, g] of this.jobs) {
       const selected = sel?.kind === "job" && sel.id === id;
       g.scale.setScalar(zoomScale * (selected ? 1.4 : 1));
+      (g.userData.marker as THREE.Object3D).position.z = 46 + Math.sin(this.pulse * 3 + id) * 3;
+      (g.userData.marker as THREE.Object3D).rotation.z = this.pulse * 1.5;
     }
 
     const mc = MercatorCoordinate.fromLngLat([this.origin.lng, this.origin.lat], 0);
     const s = mc.meterInMercatorCoordinateUnits();
     const m = new THREE.Matrix4().fromArray(opts.defaultProjectionData.mainMatrix as number[]);
-    const l = new THREE.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new THREE.Vector3(s, -s, s));
+    const l = new THREE.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new THREE.Vector3(s, s, s));
     this.camera.projectionMatrix = m.multiply(l);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     this.renderer.resetState();
