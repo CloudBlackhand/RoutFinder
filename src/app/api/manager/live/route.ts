@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { unauthorized } from "@/lib/auth";
 import { requireRole } from "@/lib/session";
@@ -9,7 +9,7 @@ export async function GET() {
   const db = getDb();
   const day = todayStr();
   const [installers, positions, jobs, routes] = await Promise.all([
-    db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(eq(schema.users.role, "installer")),
+    db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(and(eq(schema.users.role, "installer"), eq(schema.users.active, true))),
     db.select().from(schema.livePositions),
     db
       .select({

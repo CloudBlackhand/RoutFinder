@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Picked } from "@/components/map/FinderLayer";
+import { JobsPanel, TeamPanel } from "./panels";
 import { JOB_COLOR, JOB_LABEL, STATE_COLOR, STATE_LABEL, fmtDuration, installerState, jobStats, type LiveData } from "@/lib/status";
 
 const Map3D = dynamic(() => import("@/components/map/Map3D"), { ssr: false });
@@ -17,6 +18,7 @@ export default function ManagerPage() {
   const [focus, setFocus] = useState<[number, number] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [tab, setTab] = useState<"painel" | "servicos" | "equipe">("painel");
 
   const load = useCallback(async () => {
     const r = await fetch("/api/manager/live", { cache: "no-store" });
@@ -98,12 +100,22 @@ export default function ManagerPage() {
     <div className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
       <Map3D data={data} selected={selected} onSelect={pick} trail={trail} focus={focus} />
 
-      <aside className="absolute left-3 top-3 bottom-3 flex w-80 flex-col gap-3 overflow-y-auto rounded-xl border border-white/10 bg-slate-900/85 p-4 backdrop-blur">
+      <aside className="absolute left-3 top-3 bottom-3 flex w-96 flex-col gap-3 overflow-y-auto rounded-xl border border-white/10 bg-slate-900/85 p-4 backdrop-blur">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Finder · Gestão</h1>
           <button onClick={logout} className="text-xs text-slate-400 hover:text-white">Sair</button>
         </div>
 
+        <nav className="grid grid-cols-3 gap-1 rounded-lg bg-white/5 p-1 text-xs">
+          {([["painel", "Painel"], ["servicos", "Serviços"], ["equipe", "Equipe"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k)} className={`rounded-md py-1.5 ${tab === k ? "bg-sky-500 font-medium text-slate-950" : "text-slate-300"}`}>{l}</button>
+          ))}
+        </nav>
+
+        {tab === "servicos" && <JobsPanel data={data} reload={load} onFocus={(id) => pick({ kind: "job", id })} />}
+        {tab === "equipe" && <TeamPanel reload={load} />}
+        {tab === "painel" && (
+          <>
         <div className="grid grid-cols-2 gap-2 text-center text-xs">
           <Kpi label="Concluídos" value={`${stats.done}/${stats.total}`} />
           <Kpi label="Em atendimento" value={String(stats.active)} />
@@ -134,6 +146,8 @@ export default function ManagerPage() {
           ))}
           {!rows.length && <li className="text-xs text-slate-500">Carregando...</li>}
         </ul>
+          </>
+        )}
       </aside>
 
       {(selRow || selJob) && (

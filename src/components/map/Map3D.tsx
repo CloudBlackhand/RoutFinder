@@ -6,6 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { FinderLayer, type Picked } from "./FinderLayer";
 import { JOB_COLOR, STATE_COLOR, installerState, type LiveData } from "@/lib/status";
 
+maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+
 export const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
 type Props = { data: LiveData | null; selected: Picked; onSelect: (p: Picked) => void; trail: [number, number][]; focus: [number, number] | null };
@@ -83,5 +85,9 @@ export default function Map3D({ data, selected, onSelect, trail, focus }: Props)
     if (focus) map.current?.flyTo({ center: focus, zoom: Math.max(map.current.getZoom(), 15.5), pitch: 65, duration: 1000 });
   }, [focus]);
 
-  return <div ref={el} className="absolute inset-0" />;
+  return (
+    <div className="absolute inset-0">
+      <div ref={el} className="h-full w-full" />
+    </div>
+  );
 }

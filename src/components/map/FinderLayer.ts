@@ -14,7 +14,7 @@ const toLocal = (lat: number, lng: number, o: { lat: number; lng: number }) => {
 
 function makeVan(color: string) {
   const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, side: THREE.DoubleSide });
   const body = new THREE.Mesh(new THREE.BoxGeometry(18, 36, 16), mat);
   body.position.z = 12;
   const cab = new THREE.Mesh(new THREE.BoxGeometry(17, 12, 11), new THREE.MeshStandardMaterial({ color: "#e2e8f0" }));
@@ -29,7 +29,7 @@ function makeVan(color: string) {
 
 function makePin(color: string) {
   const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, side: THREE.DoubleSide });
   const stick = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 50, 12), mat);
   stick.rotation.x = Math.PI / 2;
   stick.position.z = 25;
@@ -142,7 +142,7 @@ export class FinderLayer implements CustomLayerInterface {
     return null;
   }
 
-  render(_gl: WebGL2RenderingContext, opts: { modelViewProjectionMatrix: ArrayLike<number> }) {
+  render(_gl: WebGL2RenderingContext, opts: { defaultProjectionData: { mainMatrix: ArrayLike<number> } }) {
     const now = performance.now();
     const dt = Math.min((now - this.last) / 1000, 0.1);
     this.last = now;
@@ -167,7 +167,7 @@ export class FinderLayer implements CustomLayerInterface {
 
     const mc = MercatorCoordinate.fromLngLat([this.origin.lng, this.origin.lat], 0);
     const s = mc.meterInMercatorCoordinateUnits();
-    const m = new THREE.Matrix4().fromArray(opts.modelViewProjectionMatrix as number[]);
+    const m = new THREE.Matrix4().fromArray(opts.defaultProjectionData.mainMatrix as number[]);
     const l = new THREE.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new THREE.Vector3(s, -s, s));
     this.camera.projectionMatrix = m.multiply(l);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
