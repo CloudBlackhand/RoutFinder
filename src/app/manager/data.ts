@@ -16,3 +16,6 @@ export const installersOf = (db: ReturnType<typeof getDb>) =>
     .orderBy(asc(schema.users.name));
 
 export type Db = ReturnType<typeof getDb>;
+
+export const sellersOf = (db: Db) =>
+  db.select({ id: schema.sellers.id, name: schema.sellers.name }).from(schema.sellers).where(eq(schema.sellers.active, true)).orderBy(asc(schema.sellers.name));

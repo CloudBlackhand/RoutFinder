@@ -13,6 +13,18 @@ export const users = pgTable("users", {
   active: boolean("active").notNull().default(true),
 });
 
+export const personTypeEnum = pgEnum("person_type", ["pf", "pj"]);
+export const sourceEnum = pgEnum("lead_source", ["indicacao", "site", "redes_sociais", "porta_a_porta", "loja", "telefone", "outro"]);
+
+export const sellers = pgTable("sellers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  commissionPct: doublePrecision("commission_pct").notNull().default(10),
+  active: boolean("active").notNull().default(true),
+});
+
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -22,6 +34,18 @@ export const customers = pgTable("customers", {
   phone: text("phone"),
   email: text("email"),
   document: text("document"),
+  personType: personTypeEnum("person_type").notNull().default("pf"),
+  phone2: text("phone2"),
+  birthDate: text("birth_date"),
+  zip: text("zip"),
+  street: text("street"),
+  number: text("number"),
+  complement: text("complement"),
+  neighborhood: text("neighborhood"),
+  city: text("city"),
+  uf: text("uf"),
+  source: sourceEnum("source"),
+  sellerId: integer("seller_id").references(() => sellers.id),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -129,6 +153,10 @@ export const orders = pgTable("orders", {
   status: orderStatusEnum("status").notNull().default("novo"),
   planId: integer("plan_id").references(() => plans.id),
   contractId: integer("contract_id").references(() => contracts.id),
+  sellerId: integer("seller_id").references(() => sellers.id),
+  channel: sourceEnum("channel"),
+  priceCents: integer("price_cents"),
+  installFeeCents: integer("install_fee_cents").notNull().default(0),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   closedAt: timestamp("closed_at", { withTimezone: true }),
@@ -160,3 +188,22 @@ export const tickets = pgTable("tickets", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
 });
+
+export const contactChannelEnum = pgEnum("contact_channel", ["telefone", "whatsapp", "email", "presencial", "visita"]);
+export const contactReasonEnum = pgEnum("contact_reason", ["venda", "suporte", "cobranca", "retencao", "cadastro", "outro"]);
+
+export const interactions = pgTable(
+  "interactions",
+  {
+    id: serial("id").primaryKey(),
+    customerId: integer("customer_id").notNull().references(() => customers.id),
+    userId: integer("user_id").references(() => users.id),
+    channel: contactChannelEnum("channel").notNull(),
+    reason: contactReasonEnum("reason").notNull().default("outro"),
+    summary: text("summary").notNull(),
+    followUpDate: text("follow_up_date"),
+    followUpDone: boolean("follow_up_done").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("interactions_customer_idx").on(t.customerId)],
+);

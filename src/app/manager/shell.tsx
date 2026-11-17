@@ -25,6 +25,8 @@ const NAV = [
     group: "Comercial",
     items: [
       { href: "/manager/clientes", label: "Clientes", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21v-1a8 8 0 0 1 16 0v1" },
+      { href: "/manager/vendas", label: "Vendas", icon: "M3 21h18M7 15l4-5 3 3 4-7" },
+      { href: "/manager/atendimentos", label: "Atendimentos", icon: "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2z" },
       { href: "/manager/pedidos", label: "Pedidos", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" },
       { href: "/manager/planos", label: "Planos", icon: "M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0M12 20h.01" },
     ],
@@ -102,6 +104,13 @@ export default function ManagerShell({ children }: { children: React.ReactNode }
           <Link href="/manager" className="flex h-14 shrink-0 items-center border-b border-line px-5">
             <Brand />
           </Link>
+          <form action="/manager/clientes" className="relative border-b border-line px-4 py-3">
+            <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-7 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-dim" fill="none" stroke="currentColor" strokeWidth={2}>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input name="q" placeholder="Buscar cliente..." className="field h-8 pl-8 text-[12px]" />
+          </form>
           <nav className="flex-1 overflow-y-auto py-4">
             {NAV.map((g) => (
               <div key={g.group} className="mb-4">

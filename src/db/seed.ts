@@ -89,6 +89,33 @@ async function main() {
     ]);
   }
 
+
+  if (!(await db.select().from(schema.sellers)).length) {
+    const sellers = await db.insert(schema.sellers).values([
+      { name: "Ricardo Vendas", commissionPct: 12 },
+      { name: "Julia Vendas", commissionPct: 10 },
+      { name: "Pedro Telemarketing", commissionPct: 8 },
+    ]).returning();
+
+    const sources = ["indicacao", "site", "redes_sociais", "porta_a_porta", "telefone", "loja"] as const;
+    for (const [i, c] of custs.entries()) {
+      const m = c.address.match(/^(.*?), (\d+), (.*)$/);
+      await db.update(schema.customers).set({
+        street: m?.[1] ?? c.address, number: m?.[2] ?? "s/n", city: "São Paulo", uf: "SP", neighborhood: m?.[3],
+        zip: `01${String(100 + i)}0-0${String(10 + i)}`,
+        source: c.source ?? sources[i % sources.length],
+        sellerId: c.sellerId ?? (i % 3 ? sellers[i % 2].id : null),
+      }).where(eq(schema.customers.id, c.id));
+    }
+
+    await db.insert(schema.interactions).values([
+      { customerId: custs[0].id, channel: "whatsapp", reason: "venda", summary: "Cliente pediu upgrade para 1 Giga, mandei tabela de preços.", followUpDate: day },
+      { customerId: custs[2].id, channel: "telefone", reason: "cobranca", summary: "Prometeu pagar até sexta. Ligação de reforço.", followUpDate: day },
+      { customerId: custs[3].id, channel: "whatsapp", reason: "suporte", summary: "Reiniciou a ONU e voltou, mas pediu acompanhamento." },
+      { customerId: custs[9].id, channel: "presencial", reason: "cadastro", summary: "Conversa na loja sobre instalação na nova casa." },
+    ]);
+  }
+
   console.log("Seed ok. Logins: gestor@finder.dev / marcos@finder.dev / paula@finder.dev, senha finder123");
 }
 

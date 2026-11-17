@@ -64,3 +64,48 @@ export function dueDateFor(competence: string, dueDay: number) {
 }
 export const shiftDay = (day: string, n: number) => new Date(Date.parse(`${day}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 export const nowMs = () => Date.now();
+
+export type Source = "indicacao" | "site" | "redes_sociais" | "porta_a_porta" | "loja" | "telefone" | "outro";
+export type ContactChannel = "telefone" | "whatsapp" | "email" | "presencial" | "visita";
+export type ContactReason = "venda" | "suporte" | "cobranca" | "retencao" | "cadastro" | "outro";
+
+export const SOURCE: Record<Source, string> = {
+  indicacao: "Indicação",
+  site: "Site",
+  redes_sociais: "Redes sociais",
+  porta_a_porta: "Porta a porta",
+  loja: "Loja",
+  telefone: "Telefone",
+  outro: "Outro",
+};
+export const CONTACT_CHANNEL: Record<ContactChannel, string> = { telefone: "Telefone", whatsapp: "WhatsApp", email: "E-mail", presencial: "Presencial", visita: "Visita" };
+export const CONTACT_REASON: Record<ContactReason, Meta> = {
+  venda: { label: "Venda", color: "#22c55e" },
+  suporte: { label: "Suporte", color: "#38bdf8" },
+  cobranca: { label: "Cobrança", color: "#ef4444" },
+  retencao: { label: "Retenção", color: "#f97316" },
+  cadastro: { label: "Cadastro", color: "#a1a1aa" },
+  outro: { label: "Outro", color: GRAY },
+};
+export const PERSON = { pf: "Pessoa física", pj: "Pessoa jurídica" } as const;
+
+export const digits = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "");
+export const waLink = (phone: string | null | undefined) => {
+  const d = digits(phone);
+  return d.length >= 10 ? `https://wa.me/${d.length <= 11 ? "55" + d : d}` : null;
+};
+
+type Addr = { street?: string | null; number?: string | null; complement?: string | null; neighborhood?: string | null; city?: string | null; uf?: string | null };
+export function composeAddress(a: Addr) {
+  const line = [a.street, a.number].filter(Boolean).join(", ") + (a.complement ? ` - ${a.complement}` : "");
+  const place = [a.neighborhood, [a.city, a.uf].filter(Boolean).join(" - ")].filter(Boolean).join(", ");
+  return [line, place].filter(Boolean).join(" · ");
+}
+
+export function tenure(since: Date | string, now = nowMs()) {
+  const months = Math.floor((now - +new Date(since)) / (30.44 * 86_400_000));
+  if (months < 1) return "menos de 1 mês";
+  if (months < 12) return `${months} ${months === 1 ? "mês" : "meses"}`;
+  const y = Math.floor(months / 12);
+  return `${y} ${y === 1 ? "ano" : "anos"}${months % 12 ? ` e ${months % 12} m` : ""}`;
+}

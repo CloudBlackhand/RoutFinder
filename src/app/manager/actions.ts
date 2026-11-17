@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { getDb, schema } from "@/db";
 import { geocode } from "@/lib/geocode";
 import { requireRole } from "@/lib/session";
-import { dueDateFor, today } from "@/lib/telecom";
+import { composeAddress, dueDateFor, today } from "@/lib/telecom";
 
 export type FormState = { error?: string; ok?: string } | null;
 
@@ -27,39 +27,87 @@ const cents = (v: string) => {
 };
 const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
+const SOURCES = ["indicacao", "site", "redes_sociais", "porta_a_porta", "loja", "telefone", "outro"] as const;
+const pick = <T extends string>(v: string, list: readonly T[]) => (list.includes(v as T) ? (v as T) : null);
+
+function customerFields(fd: FormData) {
+  const uf = str(fd, "uf").toUpperCase().slice(0, 2) || null;
+  return {
+    name: str(fd, "name"),
+    personType: str(fd, "personType") === "pj" ? ("pj" as const) : ("pf" as const),
+    document: opt(fd, "document"),
+    birthDate: opt(fd, "birthDate"),
+    phone: opt(fd, "phone"),
+    phone2: opt(fd, "phone2"),
+    email: opt(fd, "email"),
+    zip: opt(fd, "zip"),
+    street: opt(fd, "street"),
+    number: opt(fd, "number"),
+    complement: opt(fd, "complement"),
+    neighborhood: opt(fd, "neighborhood"),
+    city: opt(fd, "city"),
+    uf,
+    source: pick(str(fd, "source"), SOURCES),
+    sellerId: int(fd, "sellerId"),
+    notes: opt(fd, "notes"),
+  };
+}
+
+async function locate(c: ReturnType<typeof customerFields>) {
+  const tries = [
+    [c.street, c.number, c.neighborhood, c.city, c.uf],
+    [c.street, c.number, c.city, c.uf],
+    [c.street, c.city, c.uf],
+    [c.zip, c.city, c.uf],
+  ].map((parts) => parts.filter(Boolean).join(", "));
+  for (const q of [...new Set(tries)].filter((q) => q.length > 6)) {
+    const [hit] = await geocode(q, 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export async function createCustomer(_: FormState, fd: FormData): Promise<FormState> {
   const db = await guard();
-  const name = str(fd, "name");
-  const address = str(fd, "address");
-  if (!name || !address) return { error: "Nome e endereço são obrigatórios." };
+  const c = customerFields(fd);
+  if (!c.name || !c.street || !c.city) return { error: "Nome, rua e cidade são obrigatórios." };
   let place;
   try {
-    [place] = await geocode(address, 1);
+    place = await locate(c);
   } catch {
     return { error: "Busca de endereço indisponível. Tente novamente." };
   }
-  if (!place) return { error: "Endereço não encontrado. Inclua número, cidade e estado." };
-  const [c] = await db
+  if (!place) return { error: "Endereço não localizado no mapa. Confira rua, número e cidade." };
+  const [row] = await db
     .insert(schema.customers)
-    .values({ name, address: place.label, lat: place.lat, lng: place.lng, phone: opt(fd, "phone"), email: opt(fd, "email"), document: opt(fd, "document"), notes: opt(fd, "notes") })
+    .values({ ...c, address: composeAddress(c), lat: place.lat, lng: place.lng })
     .returning({ id: schema.customers.id });
   const planId = int(fd, "planId");
-  if (planId) await db.insert(schema.orders).values({ customerId: c.id, type: "nova_assinatura", planId });
+  if (planId) {
+    const [plan] = await db.select().from(schema.plans).where(eq(schema.plans.id, planId));
+    if (plan) await db.insert(schema.orders).values({ customerId: row.id, type: "nova_assinatura", planId, priceCents: plan.priceCents, sellerId: c.sellerId, channel: c.source });
+  }
   refresh();
-  redirect(`/manager/clientes/${c.id}`);
+  redirect(`/manager/clientes/${row.id}`);
 }
 
 export async function updateCustomer(_: FormState, fd: FormData): Promise<FormState> {
   const db = await guard();
   const id = int(fd, "id");
-  const name = str(fd, "name");
-  if (!id || !name) return { error: "Nome é obrigatório." };
-  await db
-    .update(schema.customers)
-    .set({ name, phone: opt(fd, "phone"), email: opt(fd, "email"), document: opt(fd, "document"), notes: opt(fd, "notes") })
-    .where(eq(schema.customers.id, id));
+  const c = customerFields(fd);
+  if (!id || !c.name) return { error: "Nome é obrigatório." };
+  const [old] = await db.select().from(schema.customers).where(eq(schema.customers.id, id));
+  if (!old) return { error: "Cliente não encontrado." };
+  const moved = (["street", "number", "neighborhood", "city", "uf", "zip"] as const).some((k) => (old[k] ?? null) !== c[k]);
+  let geo = {};
+  if (moved && c.street && c.city) {
+    const place = await locate(c).catch(() => null);
+    if (!place) return { error: "Novo endereço não localizado no mapa. Confira rua, número e cidade." };
+    geo = { address: composeAddress(c), lat: place.lat, lng: place.lng };
+  }
+  await db.update(schema.customers).set({ ...c, ...geo }).where(eq(schema.customers.id, id));
   refresh();
-  return { ok: "Dados salvos." };
+  return { ok: moved ? "Dados e endereço atualizados." : "Dados salvos." };
 }
 
 export async function savePlan(_: FormState, fd: FormData): Promise<FormState> {
@@ -96,7 +144,18 @@ export async function createOrder(_: FormState, fd: FormData): Promise<FormState
   if (!customerId || !["nova_assinatura", "mudanca_plano", "cancelamento"].includes(type)) return { error: "Selecione cliente e tipo." };
   if (type !== "cancelamento" && !planId) return { error: "Selecione o plano." };
   if (type !== "nova_assinatura" && !contractId) return { error: "Selecione o contrato." };
-  await db.insert(schema.orders).values({ customerId, type, planId: type === "cancelamento" ? null : planId, contractId: type === "nova_assinatura" ? null : contractId, notes: opt(fd, "notes") });
+  const [plan] = type !== "cancelamento" ? await db.select().from(schema.plans).where(eq(schema.plans.id, planId!)) : [];
+  await db.insert(schema.orders).values({
+    customerId,
+    type,
+    planId: plan?.id ?? null,
+    priceCents: plan?.priceCents ?? null,
+    contractId: type === "nova_assinatura" ? null : contractId,
+    sellerId: int(fd, "sellerId"),
+    channel: pick(str(fd, "channel"), SOURCES),
+    installFeeCents: cents(str(fd, "installFee")) ?? 0,
+    notes: opt(fd, "notes"),
+  });
   refresh();
   return { ok: "Pedido registrado." };
 }
@@ -114,7 +173,7 @@ export async function processOrder(_: FormState, fd: FormData): Promise<FormStat
     const [plan] = await db.select().from(schema.plans).where(eq(schema.plans.id, o.planId!));
     const [contract] = await db
       .insert(schema.contracts)
-      .values({ customerId: o.customerId, planId: plan.id, priceCents: plan.priceCents, dueDay: int(fd, "dueDay") ?? 10 })
+      .values({ customerId: o.customerId, planId: plan.id, priceCents: o.priceCents ?? plan.priceCents, dueDay: int(fd, "dueDay") ?? 10 })
       .returning({ id: schema.contracts.id });
     await db.insert(schema.jobs).values({ customerId: o.customerId, type: "instalacao", day, installerId: int(fd, "installerId"), orderId: o.id });
     await db.update(schema.orders).set({ status: "agendado", contractId: contract.id }).where(eq(schema.orders.id, o.id));
@@ -253,5 +312,55 @@ export async function updateJob(fd: FormData) {
     .update(schema.jobs)
     .set({ installerId: int(fd, "installerId"), stopOrder: null, ...(isDay(day) ? { day } : {}) })
     .where(and(eq(schema.jobs.id, id), eq(schema.jobs.status, "pendente")));
+  refresh();
+}
+
+
+const CHANNELS = ["telefone", "whatsapp", "email", "presencial", "visita"] as const;
+const REASONS = ["venda", "suporte", "cobranca", "retencao", "cadastro", "outro"] as const;
+
+export async function createInteraction(_: FormState, fd: FormData): Promise<FormState> {
+  const session = await requireRole("manager");
+  if (!session) throw new Error("Não autorizado");
+  const customerId = int(fd, "customerId");
+  const channel = pick(str(fd, "channel"), CHANNELS);
+  const summary = str(fd, "summary");
+  if (!customerId || !channel || !summary) return { error: "Informe canal e resumo do contato." };
+  const followUpDate = str(fd, "followUpDate");
+  await getDb().insert(schema.interactions).values({
+    customerId,
+    userId: session.uid,
+    channel,
+    reason: pick(str(fd, "reason"), REASONS) ?? "outro",
+    summary,
+    followUpDate: isDay(followUpDate) ? followUpDate : null,
+  });
+  refresh();
+  return { ok: "Contato registrado." };
+}
+
+export async function completeFollowUp(fd: FormData) {
+  const db = await guard();
+  const id = int(fd, "id");
+  if (id) await db.update(schema.interactions).set({ followUpDone: true }).where(eq(schema.interactions.id, id));
+  refresh();
+}
+
+export async function saveSeller(_: FormState, fd: FormData): Promise<FormState> {
+  const db = await guard();
+  const name = str(fd, "name");
+  const pct = Number(str(fd, "commissionPct").replace(",", "."));
+  if (!name || !Number.isFinite(pct) || pct < 0 || pct > 100) return { error: "Informe nome e comissão entre 0 e 100%." };
+  await db.insert(schema.sellers).values({ name, phone: opt(fd, "phone"), email: opt(fd, "email"), commissionPct: pct });
+  refresh();
+  return { ok: "Vendedor cadastrado." };
+}
+
+export async function toggleSeller(fd: FormData) {
+  const db = await guard();
+  const id = int(fd, "id");
+  if (!id) return;
+  const [v] = await db.select({ active: schema.sellers.active }).from(schema.sellers).where(eq(schema.sellers.id, id));
+  if (v) await db.update(schema.sellers).set({ active: !v.active }).where(eq(schema.sellers.id, id));
   refresh();
 }
