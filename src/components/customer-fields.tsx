@@ -10,7 +10,7 @@ type Defaults = Partial<Record<"name" | "personType" | "document" | "birthDate" 
 
 const ADDR = ["zip", "street", "number", "complement", "neighborhood", "city", "uf"] as const;
 
-export function CustomerFields({ d = {}, sellers, compact }: { d?: Defaults; sellers: { id: number; name: string }[]; compact?: boolean }) {
+export function CustomerFields({ d = {}, sellers = [], compact, hideCommercial }: { d?: Defaults; sellers?: { id: number; name: string }[]; compact?: boolean; hideCommercial?: boolean }) {
   const [pj, setPj] = useState(d.personType === "pj");
   const [addr, setAddr] = useState<Record<(typeof ADDR)[number], string>>(() => Object.fromEntries(ADDR.map((k) => [k, d[k] ?? ""])) as Record<(typeof ADDR)[number], string>);
   const [cepMsg, setCepMsg] = useState("");
@@ -56,7 +56,7 @@ export function CustomerFields({ d = {}, sellers, compact }: { d?: Defaults; sel
           <input name="email" type="email" defaultValue={d.email ?? ""} className="field" />
         </Field>
         <Field label="Celular / WhatsApp">
-          <input name="phone" defaultValue={d.phone ?? ""} placeholder="(11) 90000-0000" className="field" />
+          <input name="phone" required defaultValue={d.phone ?? ""} placeholder="(11) 90000-0000" className="field" />
         </Field>
         <Field label="Telefone 2">
           <input name="phone2" defaultValue={d.phone2 ?? ""} className="field" />
@@ -96,6 +96,8 @@ export function CustomerFields({ d = {}, sellers, compact }: { d?: Defaults; sel
         </Field>
       </div>
 
+      {!hideCommercial && (
+        <>
       <div className="label mt-1 border-b border-line pb-1.5 text-dim">Comercial</div>
       <div className={g2}>
         <Field label="Origem">
@@ -115,6 +117,8 @@ export function CustomerFields({ d = {}, sellers, compact }: { d?: Defaults; sel
           </select>
         </Field>
       </div>
+        </>
+      )}
       <Field label="Observações">
         <textarea name="notes" rows={2} defaultValue={d.notes ?? ""} className="field h-auto py-2" />
       </Field>

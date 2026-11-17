@@ -1,12 +1,9 @@
 import { asc, eq, ne } from "drizzle-orm";
 import Link from "next/link";
 import { schema } from "@/db";
-import { ActionForm, Submit } from "@/components/forms";
-import { CustomerFields } from "@/components/customer-fields";
-import { Empty, Field, Kpi, KpiStrip, Page, PageHead, Panel, Status, Tabs } from "@/components/ui";
+import { Empty, Kpi, KpiStrip, Page, PageHead, Status, Tabs } from "@/components/ui";
 import { CONTRACT, SOURCE, brl, invoiceState, waLink } from "@/lib/telecom";
-import { createCustomer } from "../actions";
-import { managerDb, sellersOf } from "../data";
+import { managerDb } from "../data";
 
 const FILTERS = [
   { k: "", label: "Todos" },
@@ -19,7 +16,7 @@ const FILTERS = [
 export default async function CustomersPage(props: PageProps<"/manager/clientes">) {
   const { q = "", s = "" } = (await props.searchParams) as { q?: string; s?: string };
   const db = await managerDb();
-  const [customers, contracts, invoices, plans, sellers] = await Promise.all([
+  const [customers, contracts, invoices] = await Promise.all([
     db.select().from(schema.customers).orderBy(asc(schema.customers.name)),
     db
       .select({ id: schema.contracts.id, customerId: schema.contracts.customerId, status: schema.contracts.status, priceCents: schema.contracts.priceCents, plan: schema.plans.name })
@@ -27,8 +24,6 @@ export default async function CustomersPage(props: PageProps<"/manager/clientes"
       .innerJoin(schema.plans, eq(schema.plans.id, schema.contracts.planId))
       .where(ne(schema.contracts.status, "cancelado")),
     db.select({ customerId: schema.invoices.customerId, status: schema.invoices.status, dueDate: schema.invoices.dueDate, amountCents: schema.invoices.amountCents }).from(schema.invoices).where(eq(schema.invoices.status, "aberta")),
-    db.select().from(schema.plans).where(eq(schema.plans.active, true)).orderBy(asc(schema.plans.priceCents)),
-    sellersOf(db),
   ]);
 
   const overdue = invoices.filter((i) => invoiceState(i) === "vencida");
@@ -55,7 +50,10 @@ export default async function CustomersPage(props: PageProps<"/manager/clientes"
 
   return (
     <Page>
-      <PageHead kicker="Comercial" title="Clientes" />
+      <PageHead kicker="Comercial" title="Clientes">
+        <Link href="/manager/clientes/novo" className="btn">Novo cliente</Link>
+        <Link href="/manager/vendas/nova" className="btn btn-primary">Nova venda</Link>
+      </PageHead>
 
       <KpiStrip>
         <Kpi label="Clientes" value={String(customers.length)} hint={`${new Set(active.map((c) => c.customerId)).size} com contrato ativo`} />
@@ -64,8 +62,7 @@ export default async function CustomersPage(props: PageProps<"/manager/clientes"
         <Kpi label="Inadimplentes" value={String(lateBy.size)} hint={brl(overdue.reduce((s, i) => s + i.amountCents, 0)) + " vencido"} warn={lateBy.size > 0} />
       </KpiStrip>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[1fr_360px]">
-        <section className="panel min-w-0">
+      <section className="panel min-w-0">
           <Tabs active={href(s)} items={FILTERS.map((f) => ({ href: href(f.k), label: f.label, count: counts(f.k) }))} />
           <form className="flex gap-2 border-b border-line p-3">
             <input name="q" defaultValue={q} placeholder="Buscar por nome, CPF/CNPJ, telefone, e-mail ou endereço" className="field" />
@@ -129,25 +126,7 @@ export default async function CustomersPage(props: PageProps<"/manager/clientes"
               </tbody>
             </table>
           </div>
-        </section>
-
-        <Panel title="Novo cliente">
-          <ActionForm action={createCustomer} className="flex flex-col gap-3 p-3">
-            <CustomerFields sellers={sellers} compact />
-            <Field label="Plano contratado (opcional)">
-              <select name="planId" className="field" defaultValue="">
-                <option value="">Sem pedido agora</option>
-                {plans.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {brl(p.priceCents)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Submit>Cadastrar cliente</Submit>
-          </ActionForm>
-        </Panel>
-      </div>
+      </section>
     </Page>
   );
 }

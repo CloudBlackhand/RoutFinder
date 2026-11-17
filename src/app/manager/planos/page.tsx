@@ -79,7 +79,7 @@ export default async function PlansPage(props: PageProps<"/manager/planos">) {
         </Panel>
 
         <Panel title={editing ? `Editar plano #${editing.id}` : "Novo plano"} meta={editing && <Link href="/manager/planos" className="hover:text-fg">Cancelar</Link>}>
-          <ActionForm key={editing?.id ?? "new"} action={savePlan} className="flex flex-col gap-3 p-3">
+          <ActionForm keep={!!editing} key={editing?.id ?? "new"} action={savePlan} className="flex flex-col gap-3 p-3">
             {editing && <input type="hidden" name="id" value={editing.id} />}
             <Field label="Nome comercial">
               <input name="name" required defaultValue={editing?.name} placeholder="Fibra 500 Mega" className="field" />

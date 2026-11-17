@@ -2,10 +2,10 @@ import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import Link from "next/link";
 import { schema } from "@/db";
 import { ActionForm, Submit } from "@/components/forms";
-import { Act, Empty, Field, Kpi, KpiStrip, Page, PageHead, Panel, Status } from "@/components/ui";
+import { Act, Empty, Kpi, KpiStrip, Page, PageHead, Panel, Status } from "@/components/ui";
 import { ORDER, ORDER_TYPE, SOURCE, brl, thisMonth } from "@/lib/telecom";
-import { createOrder, saveSeller, toggleSeller } from "../actions";
-import { managerDb, sellersOf } from "../data";
+import { saveSeller, toggleSeller } from "../actions";
+import { managerDb } from "../data";
 
 const monthRange = (m: string) => [`${m}-01`, m >= "9999-12" ? "9999-99" : new Date(Date.UTC(+m.slice(0, 4), +m.slice(5), 1)).toISOString().slice(0, 10)];
 
@@ -14,7 +14,7 @@ export default async function SalesPage(props: PageProps<"/manager/vendas">) {
   const month = /^\d{4}-\d{2}$/.test(sp.m ?? "") ? sp.m! : thisMonth();
   const [start, end] = monthRange(month);
   const db = await managerDb();
-  const [orders, customers, plans, sellers, installs, activeSellers] = await Promise.all([
+  const [orders, sellers, installs] = await Promise.all([
     db
       .select({ o: schema.orders, customer: schema.customers.name, plan: schema.plans.name, seller: schema.sellers.name, sellerPct: schema.sellers.commissionPct })
       .from(schema.orders)
@@ -23,14 +23,11 @@ export default async function SalesPage(props: PageProps<"/manager/vendas">) {
       .leftJoin(schema.sellers, eq(schema.sellers.id, schema.orders.sellerId))
       .where(and(gte(schema.orders.createdAt, new Date(start)), lt(schema.orders.createdAt, new Date(end))))
       .orderBy(desc(schema.orders.createdAt)),
-    db.select({ id: schema.customers.id, name: schema.customers.name }).from(schema.customers).orderBy(asc(schema.customers.name)),
-    db.select().from(schema.plans).where(eq(schema.plans.active, true)).orderBy(asc(schema.plans.priceCents)),
     db.select().from(schema.sellers).orderBy(asc(schema.sellers.name)),
     db
       .select({ installerId: schema.jobs.installerId })
       .from(schema.jobs)
       .where(and(eq(schema.jobs.type, "instalacao"), eq(schema.jobs.status, "concluido"), gte(schema.jobs.finishedAt, new Date(start)), lt(schema.jobs.finishedAt, new Date(end)))),
-    sellersOf(db),
   ]);
 
   const created = orders;
@@ -67,6 +64,7 @@ export default async function SalesPage(props: PageProps<"/manager/vendas">) {
           <input name="m" type="month" defaultValue={month} className="field w-[140px]" />
           <button className="btn">Ver</button>
         </form>
+        <Link href="/manager/vendas/nova" className="btn btn-primary">Nova venda</Link>
       </PageHead>
 
       <KpiStrip cols={5}>
@@ -107,7 +105,7 @@ export default async function SalesPage(props: PageProps<"/manager/vendas">) {
                       <td><Status {...ORDER[o.status]} /></td>
                     </tr>
                   ))}
-                  {!orders.length && <Empty cols={8} text="Nenhum pedido no período." />}
+                  {!orders.length && <Empty cols={8} text="Nenhuma venda no período. Clique em Nova venda." />}
                 </tbody>
               </table>
             </div>
@@ -175,53 +173,6 @@ export default async function SalesPage(props: PageProps<"/manager/vendas">) {
         </div>
 
         <div className="flex flex-col gap-5">
-          <Panel title="Registrar venda">
-            <ActionForm action={createOrder} className="flex flex-col gap-3 p-3">
-              <input type="hidden" name="type" value="nova_assinatura" />
-              <Field label="Cliente">
-                <select name="customerId" required className="field">
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Plano">
-                <select name="planId" className="field">
-                  {plans.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} · {brl(p.priceCents)}</option>
-                  ))}
-                </select>
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Vendedor">
-                  <select name="sellerId" className="field">
-                    <option value="">Direto</option>
-                    {activeSellers.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Canal">
-                  <select name="channel" className="field">
-                    <option value="">—</option>
-                    {Object.entries(SOURCE).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Taxa de instalação (R$)">
-                  <input name="installFee" placeholder="0,00" className="field" />
-                </Field>
-                <Field label="Observações">
-                  <input name="notes" className="field" />
-                </Field>
-              </div>
-              <Submit>Registrar</Submit>
-            </ActionForm>
-          </Panel>
-
           <Panel title="Equipe comercial">
             <table className="tbl">
               <tbody>

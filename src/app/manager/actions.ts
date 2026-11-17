@@ -55,12 +55,12 @@ function customerFields(fd: FormData) {
 
 async function locate(c: ReturnType<typeof customerFields>) {
   const tries = [
-    [c.street, c.number, c.neighborhood, c.city, c.uf],
     [c.street, c.number, c.city, c.uf],
     [c.street, c.city, c.uf],
-    [c.zip, c.city, c.uf],
+    [c.neighborhood, c.city, c.uf],
+    [c.city, c.uf],
   ].map((parts) => parts.filter(Boolean).join(", "));
-  for (const q of [...new Set(tries)].filter((q) => q.length > 6)) {
+  for (const q of [...new Set(tries)].filter((q) => q.length > 3)) {
     const [hit] = await geocode(q, 1);
     if (hit) return hit;
   }
@@ -77,7 +77,7 @@ export async function createCustomer(_: FormState, fd: FormData): Promise<FormSt
   } catch {
     return { error: "Busca de endereço indisponível. Tente novamente." };
   }
-  if (!place) return { error: "Endereço não localizado no mapa. Confira rua, número e cidade." };
+  if (!place) return { error: "Cidade não localizada no mapa. Confira cidade e UF." };
   const [row] = await db
     .insert(schema.customers)
     .values({ ...c, address: composeAddress(c), lat: place.lat, lng: place.lng })
@@ -102,7 +102,7 @@ export async function updateCustomer(_: FormState, fd: FormData): Promise<FormSt
   let geo = {};
   if (moved && c.street && c.city) {
     const place = await locate(c).catch(() => null);
-    if (!place) return { error: "Novo endereço não localizado no mapa. Confira rua, número e cidade." };
+    if (!place) return { error: "Cidade não localizada no mapa. Confira cidade e UF." };
     geo = { address: composeAddress(c), lat: place.lat, lng: place.lng };
   }
   await db.update(schema.customers).set({ ...c, ...geo }).where(eq(schema.customers.id, id));
@@ -363,4 +363,60 @@ export async function toggleSeller(fd: FormData) {
   const [v] = await db.select({ active: schema.sellers.active }).from(schema.sellers).where(eq(schema.sellers.id, id));
   if (v) await db.update(schema.sellers).set({ active: !v.active }).where(eq(schema.sellers.id, id));
   refresh();
+}
+
+export async function createSale(_: FormState, fd: FormData): Promise<FormState> {
+  const db = await guard();
+  const planId = int(fd, "planId");
+  const [plan] = planId ? await db.select().from(schema.plans).where(eq(schema.plans.id, planId)) : [];
+  if (!plan) return { error: "Escolha o plano." };
+  const priceCents = str(fd, "price") ? cents(str(fd, "price")) : plan.priceCents;
+  if (priceCents == null) return { error: "Mensalidade inválida." };
+  const scheduleNow = str(fd, "schedule") === "agora";
+  const day = str(fd, "day");
+  if (scheduleNow && !isDay(day)) return { error: "Informe a data da instalação ou escolha agendar depois." };
+
+  let customerId = int(fd, "customerId");
+  let sellerId = int(fd, "sellerId");
+  let channel = pick(str(fd, "channel"), SOURCES);
+  if (str(fd, "mode") === "novo") {
+    const c = customerFields(fd);
+    c.sellerId = sellerId;
+    c.source = channel;
+    if (!c.name || !c.phone) return { error: "Informe nome e celular do cliente." };
+    if (!c.street || !c.city) return { error: "Informe rua e cidade do endereço de instalação." };
+    if (c.document) {
+      const [dup] = await db.select({ id: schema.customers.id, name: schema.customers.name }).from(schema.customers).where(eq(schema.customers.document, c.document));
+      if (dup) return { error: `Já existe um cliente com esse documento: ${dup.name}. Use "Cliente já cadastrado".` };
+    }
+    let place;
+    try {
+      place = await locate(c);
+    } catch {
+      return { error: "Busca de endereço indisponível no momento. Tente de novo em instantes." };
+    }
+    if (!place) return { error: "Cidade não localizada no mapa. Confira cidade e UF." };
+    const [row] = await db.insert(schema.customers).values({ ...c, address: composeAddress(c), lat: place.lat, lng: place.lng }).returning({ id: schema.customers.id });
+    customerId = row.id;
+  } else {
+    const [c] = customerId ? await db.select().from(schema.customers).where(eq(schema.customers.id, customerId)) : [];
+    if (!c) return { error: "Selecione o cliente." };
+    sellerId ??= c.sellerId;
+    channel ??= c.source;
+  }
+
+  const [order] = await db
+    .insert(schema.orders)
+    .values({ customerId: customerId!, type: "nova_assinatura", planId: plan.id, priceCents, sellerId, channel, installFeeCents: cents(str(fd, "installFee")) ?? 0, notes: opt(fd, "saleNotes") })
+    .returning({ id: schema.orders.id });
+  if (scheduleNow) {
+    const [contract] = await db
+      .insert(schema.contracts)
+      .values({ customerId: customerId!, planId: plan.id, priceCents, dueDay: int(fd, "dueDay") ?? 10 })
+      .returning({ id: schema.contracts.id });
+    await db.insert(schema.jobs).values({ customerId: customerId!, type: "instalacao", day, installerId: int(fd, "installerId"), orderId: order.id });
+    await db.update(schema.orders).set({ status: "agendado", contractId: contract.id }).where(eq(schema.orders.id, order.id));
+  }
+  refresh();
+  redirect(`/manager/clientes/${customerId}?t=pedidos&venda=${order.id}`);
 }

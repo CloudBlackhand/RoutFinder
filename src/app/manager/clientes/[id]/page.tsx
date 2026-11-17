@@ -25,7 +25,7 @@ const TABS = [
 ];
 
 export default async function CustomerPage(props: PageProps<"/manager/clientes/[id]">) {
-  const [{ id }, { t = "resumo" }] = await Promise.all([props.params, props.searchParams as Promise<{ t?: string }>]);
+  const [{ id }, { t = "resumo", venda }] = await Promise.all([props.params, props.searchParams as Promise<{ t?: string; venda?: string }>]);
   const cid = Number(id);
   if (!Number.isInteger(cid)) notFound();
   const db = await managerDb();
@@ -124,8 +124,15 @@ export default async function CustomerPage(props: PageProps<"/manager/clientes/[
           {followUpCount > 0 && <span className="num text-[12px] text-amber-400">{followUpCount} retorno(s) vencido(s)</span>}
           {wa && <a href={wa} target="_blank" rel="noreferrer" className="btn">WhatsApp</a>}
           <Link href="/manager/clientes" className="btn">Voltar</Link>
+          <Link href={`/manager/vendas/nova?c=${c.id}`} className="btn btn-primary">Nova venda</Link>
         </div>
       </PageHead>
+
+      {venda && (
+        <p role="status" className="border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-300">
+          Venda registrada (pedido #{venda}). {orders.find((x) => String(x.o.id) === venda)?.o.status === "agendado" ? "Instalação agendada — acompanhe na Agenda." : "Falta agendar a instalação em Pedidos."}
+        </p>
+      )}
 
       <section className="panel grid grid-cols-2 divide-line max-lg:divide-y lg:grid-cols-4 lg:divide-x">
         <div className="p-4">
@@ -216,7 +223,7 @@ export default async function CustomerPage(props: PageProps<"/manager/clientes/[
 
       {tab === "dados" && (
         <Panel title="Cadastro" className="max-w-[720px]">
-          <ActionForm action={updateCustomer} className="flex flex-col gap-3 p-3">
+          <ActionForm keep action={updateCustomer} className="flex flex-col gap-3 p-3">
             <input type="hidden" name="id" value={c.id} />
             <CustomerFields d={c} sellers={sellers} />
             <Submit className="btn">Salvar alterações</Submit>
