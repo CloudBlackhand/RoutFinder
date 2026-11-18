@@ -20,7 +20,7 @@ export type LivePosition = { installerId: number; lat: number; lng: number; spee
 export type LiveRoute = { installerId: number; geometry: [number, number][]; distanceM: number; durationS: number };
 export type LiveData = {
   now: number;
-  installers: { id: number; name: string }[];
+  installers: { id: number; name: string; sim?: boolean }[];
   positions: LivePosition[];
   jobs: LiveJob[];
   routes: LiveRoute[];

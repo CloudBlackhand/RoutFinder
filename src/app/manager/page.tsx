@@ -100,7 +100,7 @@ export default function OverviewPage() {
                   const done = r.jobs.filter((j) => j.status === "concluido").length;
                   return (
                     <tr key={r.id}>
-                      <td className="font-medium">{r.name}</td>
+                      <td className="font-medium">{r.name}{r.sim && <span className="label ml-2 text-sky-400">SIM</span>}</td>
                       <td><Status color={STATE_COLOR[r.state]} label={STATE_LABEL[r.state]} /></td>
                       <td className={r.current ? "" : "text-dim"}>{r.current?.customer ?? "--"}</td>
                       <td className="num">{r.since ? fmtDuration(now - new Date(r.since).getTime()) : "--"}</td>

@@ -35,9 +35,14 @@ async function main() {
         phone: `1199999${String(1000 + i)}`,
       })),
     ).returning();
+    const [marcos, paula] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.role, "installer")).orderBy(schema.users.id);
     await db.insert(schema.jobs).values(
-      custs.map((c, i) => ({ customerId: c.id, day, type: i % 4 === 0 ? ("reparo" as const) : ("instalacao" as const) })),
+      custs.map((c, i) => ({ customerId: c.id, day, type: i % 4 === 0 ? ("reparo" as const) : ("instalacao" as const), installerId: [marcos?.id, paula?.id][i % 2], stopOrder: Math.floor(i / 2) })),
     );
+    await db.insert(schema.simAgents).values([
+      { installerId: marcos!.id, lat: CENTER.lat + 0.012, lng: CENTER.lng - 0.018, lastTick: new Date() },
+      { installerId: paula!.id, lat: CENTER.lat - 0.02, lng: CENTER.lng + 0.015, lastTick: new Date() },
+    ]).onConflictDoNothing();
   }
 
   if (!(await db.select().from(schema.plans)).length) {
@@ -107,6 +112,11 @@ async function main() {
         sellerId: c.sellerId ?? (i % 3 ? sellers[i % 2].id : null),
       }).where(eq(schema.customers.id, c.id));
     }
+
+    const team = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.role, "installer"));
+    await db.insert(schema.simAgents).values(
+      team.map((u, i) => ({ installerId: u.id, lat: CENTER.lat + (i ? -0.02 : 0.012), lng: CENTER.lng + (i ? 0.015 : -0.018), lastTick: new Date() })),
+    ).onConflictDoNothing();
 
     await db.insert(schema.interactions).values([
       { customerId: custs[0].id, channel: "whatsapp", reason: "venda", summary: "Cliente pediu upgrade para 1 Giga, mandei tabela de preços.", followUpDate: day },

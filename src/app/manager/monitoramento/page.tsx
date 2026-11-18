@@ -77,6 +77,7 @@ export default function MonitoringPage() {
                 <button onClick={() => pick({ kind: "installer", id: r.id })} className={`block w-full border-b border-l-2 border-b-line px-3 py-2.5 text-left ${selInstaller === r.id ? "border-l-fg bg-raised" : "border-l-transparent hover:bg-raised"}`}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate font-medium">{r.name}</span>
+                    {r.sim && <span className="label shrink-0 text-sky-400">SIM</span>}
                     <Status color={STATE_COLOR[r.state]} label={STATE_LABEL[r.state]} />
                   </div>
                   <div className="num mt-1 flex gap-3 text-[11px] text-mute">

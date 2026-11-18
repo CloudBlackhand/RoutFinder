@@ -207,3 +207,16 @@ export const interactions = pgTable(
   },
   (t) => [index("interactions_customer_idx").on(t.customerId)],
 );
+
+export const simAgents = pgTable("sim_agents", {
+  installerId: integer("installer_id").primaryKey().references(() => users.id),
+  lat: doublePrecision("lat").notNull(),
+  lng: doublePrecision("lng").notNull(),
+  phase: text("phase").notNull().default("idle"),
+  targetJobId: integer("target_job_id"),
+  path: jsonb("path").$type<[number, number][]>(),
+  pathM: doublePrecision("path_m").notNull().default(0),
+  serviceUntil: timestamp("service_until", { withTimezone: true }),
+  lastTick: timestamp("last_tick", { withTimezone: true }).notNull().defaultNow(),
+  lastLog: timestamp("last_log", { withTimezone: true }),
+});
